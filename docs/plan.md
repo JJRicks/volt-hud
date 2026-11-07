@@ -209,3 +209,8 @@ queue" adds at most 30 s with "High Quality with Alpha" (verified: ProRes 4444, 
   the owner's session, so the panel was not reinstalled for the automation-event check.
 - 0.1.2: the clock uses the ride's recorded zone (explicit `--tz`/style first, the Mac last); a
   "Clock: …" line in the panel's Look section and in the CLI output.
+- 0.1.2 checked in AE 26.5 on the real sample (installed with `volthud-installer install`, driven by
+  the automation event, new unsaved project, AE quit after): header 0.1.2; Everything-only pick,
+  old folder pick and an Everything copy with a recorded zone all load, sync 11.277 s medium, and
+  build (16:9 Focus, 9:16 Corner imperial) with no expression errors; clock line "this Mac's zone"
+  for the sample (recorded before Volt kept zones) and "from the ride" for the zoned copy.
