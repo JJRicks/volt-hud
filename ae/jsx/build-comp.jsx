@@ -179,8 +179,9 @@ var VoltHUD = (function () {
     vg.property(2).property('ADBE Vector Trim Offset').setValue(-135);
     ex(vg.property(2).property('ADBE Vector Trim End'), 'var ok = ' + OK('ring') + '; ok ? clamp(' + V('ring') + ' / ' + p.ringMax + ', 0, 1) * 75 : 0;');
     ex(vg.property(3).property('ADBE Vector Stroke Opacity'), OK('ring') + ' && ' + V('ring') + ' > 0.3 ? 100 : 0;');
-    var num = text(nl, 'Speed value', '0', 'bold', 150, C.text, 'c', [200, 240]);
-    ex(source(num), 'var ok = ' + OK('spd') + '; ok ? String(Math.round(' + V('spd') + ')) : ' + DASH + ';');
+    var dec = p.decimals > 0 ? Math.min(2, p.decimals) : 0; // specs before 0.1.3 have no decimals: whole numbers
+    var num = text(nl, 'Speed value', dec ? '0.0' : '0', 'bold', p.valueSize || 150, C.text, 'c', [200, 240]);
+    ex(source(num), 'var ok = ' + OK('spd') + '; ok ? Math.max(0, ' + V('spd') + ').toFixed(' + dec + ') : ' + DASH + ';');
     fillFx(num, OK('spd') + ' ? ' + arr(C.text) + ' : ' + arr(C.dim) + ';');
     var u = text(nl, 'Speed unit', p.unit, 'regular', 30, C.label, 'c', [200, 288]);
     ex(source(u), OK('spd') + ' ? ' + q(p.unit) + ' : ' + NODATA + ';');

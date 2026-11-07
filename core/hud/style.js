@@ -50,6 +50,7 @@ function normalizeStyle(s) {
     aspect, preset, comp, units,
     vertUnit: vertUnits.indexOf(s.vertUnit) >= 0 ? s.vertUnit : units === 'imperial' ? 'ft/min' : 'm/min',
     gUnit: s.gUnit === 'm/s2' ? 'm/s2' : 'g',
+    speedDecimals: s.speedDecimals === 0 || s.speedDecimals === '0' ? 0 : 1, // owner, Nov 7: one decimal by default
     clock24: typeof s.clock24 === 'boolean' ? s.clock24 : units !== 'imperial',
     accent: hexToRgb(s.accent) ? rgbToHex(hexToRgb(s.accent)) : TOKENS.accent,
     plate: clamp(Number.isFinite(+s.plate) && s.plate !== null && s.plate !== '' ? +s.plate : 0.6, 0, 0.7),

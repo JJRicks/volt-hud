@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('assert');
-const { buildHudSpec, tzOffsetMin } = require('../core/hud/spec');
+const { buildHudSpec, tzOffsetMin, speedValueSize } = require('../core/hud/spec');
 const { normalizeStyle } = require('../core/hud/style');
 const { layoutWidgets, BOX } = require('../core/hud/layout');
 const B = require('../core/hud/bake');
@@ -100,4 +100,27 @@ test('all-null channel bakes as permanent no data', () => {
   const sp = buildHudSpec(tl, {});
   assert.strictEqual(sp.channels.bat.valid, false);
   void BOX;
+});
+
+test('speed readout: one decimal by default, whole numbers on request, and the number fits the ring', () => {
+  assert.strictEqual(normalizeStyle({}).speedDecimals, 1);
+  assert.strictEqual(normalizeStyle({ speedDecimals: 0 }).speedDecimals, 0);
+  assert.strictEqual(normalizeStyle({ speedDecimals: '0' }).speedDecimals, 0);
+  assert.strictEqual(normalizeStyle({ speedDecimals: 'x' }).speedDecimals, 1);
+  // Saira HUD Bold: digits 0.62 em, the point 0.30 em. The widest number must stay under 280 px,
+  // well inside the ring's inner edge (about 325 px wide where the digits' tops meet it).
+  const width = (str, size) => [...str].reduce((a, c) => a + (c === '.' ? 0.30 : 0.62), 0) * size;
+  for (const [max, dec] of [[0, 1], [8, 1], [45, 1], [99.4, 1], [99.96, 1], [120, 1], [45, 0], [188, 0]]) {
+    const size = speedValueSize(max, dec);
+    assert.ok(size >= 95 && size <= 150, max + ' ' + dec + ' size ' + size);
+    assert.ok(width(Math.max(max, 10).toFixed(dec), size) <= 280, max + ' ' + dec + ' too wide at ' + size);
+  }
+  assert.strictEqual(speedValueSize(45, 0), 150, 'whole numbers keep the 0.1.2 size');
+  assert.strictEqual(speedValueSize(45, 1), 125);
+  assert.strictEqual(speedValueSize(120, 1), 100);
+  const tl = synthTimeline({ minutes: 5 });
+  const sp = buildHudSpec(tl, {}).widgets.find((x) => x.id === 'speed').p;
+  assert.strictEqual(sp.decimals, 1); assert.strictEqual(sp.valueSize, 125);
+  const whole = buildHudSpec(tl, { speedDecimals: 0 }).widgets.find((x) => x.id === 'speed').p;
+  assert.strictEqual(whole.decimals, 0); assert.strictEqual(whole.valueSize, 150);
 });

@@ -62,6 +62,15 @@ function chan(arr, rate, o) {
 function firstValid(a) { for (let i = 0; i < a.length; i++) if (B.isNum(a[i])) return i; return -1; }
 function lastValid(a) { for (let i = a.length - 1; i >= 0; i--) if (B.isNum(a[i])) return i; return -1; }
 
+// The speed readout sits inside a 368 px ring with an 18 px stroke. Saira HUD Bold digits are
+// tabular (0.62 em; the point is 0.30 em), so size the text once from the widest number this
+// ride shows, keeping it about 280 px wide at most and the size steady through the video.
+function speedValueSize(maxSpd, decimals) {
+  const whole = String(Math.max(0, Math.round(B.isNum(maxSpd) ? maxSpd : 0))).length;
+  const em = Math.max(2, whole) * 0.62 + (decimals > 0 ? 0.30 + decimals * 0.62 : 0);
+  return Math.min(150, Math.floor(280 / em / 5) * 5);
+}
+
 function buildHudSpec(tl, styleIn, opts) {
   opts = opts || {};
   if (!tl || tl.format !== 'volthud-timeline') throw new Error('not a volthud timeline');
@@ -184,7 +193,7 @@ function buildHudSpec(tl, styleIn, opts) {
   const rideEnd = B.isNum(ride.videoEndS) ? ride.videoEndS : lastValid(kmh) >= 0 ? lastValid(kmh) / rate : tl.video.durationS;
   const lay = layoutWidgets(style);
   const P = {
-    speed: { unit: imperial ? 'mph' : 'km/h', ringMax: Math.max(30, Math.ceil(maxSpd / 10) * 10) },
+    speed: { unit: imperial ? 'mph' : 'km/h', ringMax: Math.max(30, Math.ceil(maxSpd / 10) * 10), decimals: style.speedDecimals, valueSize: speedValueSize(maxSpd, style.speedDecimals) },
     power: { scaleDraw, scaleRegen, ticksDraw, ticksRegen: scaleRegen > 500 ? [500] : [] },
     battery: {},
     vertical: { unit: style.vertUnit },
@@ -216,4 +225,4 @@ function buildHudSpec(tl, styleIn, opts) {
   };
 }
 
-module.exports = { buildHudSpec, tzOffsetMin, resolveClockZone, clockZoneOf, clockZoneLabel, FONTS, KMH_TO_MPH };
+module.exports = { buildHudSpec, tzOffsetMin, resolveClockZone, clockZoneOf, clockZoneLabel, FONTS, KMH_TO_MPH, speedValueSize };

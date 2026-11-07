@@ -27,7 +27,7 @@
     var s = {
       aspect: $('aspect').value, resolution: $('resolution').value, preset: $('preset').value, units: $('units').value,
       accent: $('accent').value, plate: +$('plate').value, scale: +$('scale').value, safe: +$('safe').value,
-      coords: $('coords').checked, widgets: widgets,
+      coords: $('coords').checked, widgets: widgets, speedDecimals: +$('speedDecimals').value,
     };
     if (c24 !== 'auto') s.clock24 = c24 === '24';
     if (raw) s.clockMode = c24;
@@ -52,7 +52,7 @@
       if (k === 'coords' || k === 'map') on = s.widgets && s.widgets[k] === true;
       l.firstChild.checked = on;
     });
-    ['aspect', 'resolution', 'units', 'accent', 'plate', 'scale', 'safe'].forEach(function (k) { if (s[k] != null) $(k).value = s[k]; });
+    ['aspect', 'resolution', 'units', 'speedDecimals', 'accent', 'plate', 'scale', 'safe'].forEach(function (k) { if (s[k] != null) $(k).value = s[k]; });
     if (s.clockMode) $('clock24').value = s.clockMode;
     $('coords').checked = false; // coordinates are opt-in every session
     fillPresets(s.preset);
@@ -361,7 +361,7 @@
     }).then(function (r) { rep.preview = r; finish(); }, function (e) { rep.error = String(e && e.message || e); finish(); });
   }
   function applyStyle(s) {
-    ['aspect', 'resolution', 'units', 'accent', 'plate', 'scale', 'safe'].forEach(function (k) { if (s[k] != null) $(k).value = s[k]; });
+    ['aspect', 'resolution', 'units', 'speedDecimals', 'accent', 'plate', 'scale', 'safe'].forEach(function (k) { if (s[k] != null) $(k).value = s[k]; });
     fillPresets(s.preset);
     if (s.coords != null) { $('coords').checked = !!s.coords; syncCoordBoxes(); }
     showSliders();

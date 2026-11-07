@@ -216,3 +216,6 @@ queue" adds at most 30 s with "High Quality with Alpha" (verified: ProRes 4444, 
   old folder pick and an Everything copy with a recorded zone all load, sync 11.277 s medium, and
   build (16:9 Focus, 9:16 Corner imperial) with no expression errors; clock line "this Mac's zone"
   for the sample (recorded before Volt kept zones) and "from the ride" for the zoned copy.
+- 0.1.3: the speed number shows one decimal by default (owner, Nov 7). Style `speedDecimals` (1, or 0
+  for whole numbers; the panel's Look › Speed). The text size is set once per ride from its top speed
+  (`speedValueSize`: 125 pt for `88.8`, 100 pt once a ride passes 99.5; whole numbers keep 150 pt).
