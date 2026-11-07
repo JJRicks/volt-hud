@@ -1,5 +1,7 @@
 # Plan
 
+> **Parked idea (owner, 2026-11-06):** a cross-platform *Volt Studio* desktop app for DIY action videos (GoPro, DJI, Insta360) that contains the AE plugin. See [idea-volt-studio.md](idea-volt-studio.md).
+
 ## Architecture (recommended)
 
 ```
