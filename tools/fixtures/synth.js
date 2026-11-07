@@ -127,10 +127,11 @@ function rng(seed) {
 }
 function gauss(r) { return Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r()); }
 
+// speedShocks: bumps scale with speed (none when stopped), as on a real scooter.
 // Truth: video_s = videoAtStartS + (mono - mono0)/1000 * (1 + driftPpm*1e-6).
 // UTC: utc = utc0 + (mono - mono0) (phone mono runs at GNSS rate).
 function makeRide(o) {
-  o = Object.assign({ durationS: 600, videoAtStartS: 20, rideS: 540, driftPpm: 40, goproGpsLatencyMs: 1300, scooterLagMs: 500, seed: 7, mono0: 5000000, utc0: Date.UTC(2026, 10, 7, 0, 0, 0), withGoproFix: true }, o);
+  o = Object.assign({ durationS: 600, videoAtStartS: 20, rideS: 540, driftPpm: 40, goproGpsLatencyMs: 1300, scooterLagMs: 500, seed: 7, mono0: 5000000, utc0: Date.UTC(2026, 10, 7, 0, 0, 0), withGoproFix: true, speedShocks: false }, o);
   const r = rng(o.seed);
   const k = 1 + o.driftPpm * 1e-6;
   const videoOfMono = (m) => o.videoAtStartS + ((m - o.mono0) / 1000) * k;
@@ -147,7 +148,7 @@ function makeRide(o) {
   const speedAt = (t) => { const i = Math.round(t / dt); return i < 0 || i >= N ? 0 : sp[i]; };
   // shocks: sparse impulses -> damped 3 Hz ringing, in ride time
   const imp = [];
-  for (let t = 1; t < o.rideS; t += 0.2 + r() * 1.5) imp.push({ t, a: (0.5 + r() * 2.5) * (r() < 0.5 ? -1 : 1) });
+  for (let t = 1; t < o.rideS; t += 0.2 + r() * 1.5) imp.push({ t, a: (0.5 + r() * 2.5) * (r() < 0.5 ? -1 : 1) * (o.speedShocks ? Math.min(1, speedAt(t) / 4) : 1) });
   const shockAt = (t) => {
     let s = 0;
     for (let j = 0; j < imp.length; j++) { const d = t - imp[j].t; if (d < 0) break; if (d < 1.2) s += imp[j].a * Math.exp(-d / 0.25) * Math.sin(2 * Math.PI * 3 * d); }

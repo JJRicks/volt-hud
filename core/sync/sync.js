@@ -8,6 +8,7 @@
 
 const S = require('../util/signal');
 const { monoToUtc } = require('../parse/volt');
+const Q = require('./search');
 
 function makeModel(monoRefMs, videoAtRefS, slope) {
   return { monoRefMs, videoAtRefS, slope };
@@ -233,32 +234,91 @@ function scoreOf(peak, psr) {
   return Math.max(0, Math.min(1, peak)) * Math.max(0, Math.min(1, (psr - 3) / 7));
 }
 
-// Main entry. opts: {nudgeMs, speedSearchS, imuSearchS, imu: bool}
+// Is the MP4 creation time usable as a coarse clock? Unset cameras say 2016-01-01; the camera
+// clock is local time labelled UTC, so hours off is normal, but days off means it was never set.
+function cameraClock(gopro, volt, monoRef) {
+  const c = gopro.chapters && gopro.chapters[0] && gopro.chapters[0].info && gopro.chapters[0].info.creationTime;
+  if (!c) return { ok: false, reason: 'none' };
+  const ms = c instanceof Date ? c.getTime() : new Date(c).getTime();
+  if (!Number.isFinite(ms)) return { ok: false, reason: 'none' };
+  const iso = new Date(ms).toISOString().slice(0, 10);
+  if (new Date(ms).getUTCFullYear() < 2020) return { ok: false, ms, reason: 'the camera clock says ' + iso + ' (never set)' };
+  if (volt.clock) {
+    const r0 = monoToUtc(volt.clock, monoRef), r1 = monoToUtc(volt.clock, (volt.stop && volt.stop.mono) || monoRef);
+    const off = ms < r0 ? r0 - ms : ms > r1 ? ms - r1 : 0;
+    if (off > 2 * 86400000) return { ok: false, ms, reason: 'the camera clock says ' + iso + ', ' + Math.round(off / 86400000) + ' days from the ride' };
+  }
+  return { ok: true, ms };
+}
+
+// Plain words for each signal, for the owner.
+const WORDS = { gnss: 'GoPro GPS time', speed: 'GPS speed', bumps: 'bumps', vibration: 'stops and starts', accel: 'speeding up and braking', anchor: 'your start mark' };
+function listWords(keys) {
+  const w = keys.map((k) => WORDS[k] || k);
+  return w.length <= 1 ? w.join('') : w.slice(0, -1).join(', ') + ' and ' + w[w.length - 1];
+}
+
+// Main entry. opts: {nudgeMs, speedSearchS, imuSearchS, imu: bool, anchorVideoS}
+// anchorVideoS: "I start rolling at this video time": the Volt data's first sustained motion is put
+// there, then fine-tuned within +-5 s.
 function syncRide(gopro, volt, opts) {
   opts = opts || {};
   const notes = [];
   const monoRef = volt.start && Number.isFinite(volt.start.mono) ? volt.start.mono : volt.clock ? volt.clock.mono0 : 0;
   const gfit = fitGoProClock(gopro.gpsTime);
-  let model, method;
+  let model, method, mode;
+  let search = null, anchor = null;
   const stats = {};
-  if (gfit && volt.clock) {
+  const anchorS = opts.anchorVideoS == null || opts.anchorVideoS === '' ? NaN : Number(opts.anchorVideoS);
+  if (Number.isFinite(anchorS)) {
+    mode = 'anchor';
+    const fm = Q.firstMotion(volt);
+    const lead = fm ? (fm.mono - monoRef) / 1000 : 0;
+    const start0 = anchorS - lead;
+    anchor = { videoS: anchorS, firstMotionMono: fm ? fm.mono : null, firstMotionRideS: fm ? lead : null, source: fm ? fm.source : null, thresholdKmh: fm ? fm.thresholdKmh : null, startS: start0 };
+    if (!fm) notes.push('No sustained motion found in the Volt data: your mark is used as the ride start.');
+    const win = opts.anchorSearchS || 5;
+    search = Q.searchStart(gopro, volt, monoRef, { lo: start0 - win, hi: start0 + win, skip: opts.searchSkip });
+    model = makeModel(monoRef, search.ok ? search.best.startS : start0, 1);
+    method = search.ok ? 'anchor+search' : 'anchor';
+    if (!search.ok) notes.push('Could not fine-tune your mark: ' + search.reason + '.');
+  } else if (gfit && volt.clock) {
+    mode = 'gnss';
     model = coarseModel(volt, gfit, monoRef);
     method = volt.clock.source === 'gnss' ? 'gnss' : 'gnss-gopro+phone-wall';
     if (!gfit.withFix) notes.push('GoPro GPS never reached a 2D/3D fix; GPSU time is used for the coarse map but GPS speed is unavailable.');
     stats.goproClock = { rmsMs: gfit.rmsMs, madMs: gfit.madMs, n: gfit.n, driftPpm: gfit.driftPpm, withFix: gfit.withFix };
     stats.phoneClock = { source: volt.clock.source, rmsMs: volt.clock.rmsMs, n: volt.clock.n, driftPpm: volt.clock.driftPpm, wallMinusGnssMs: volt.clock.wallMinusGnssMs };
-  } else if (volt.clock && gopro.chapters[0] && gopro.chapters[0].info.creationTime) {
-    const fake = { slope: 1, intercept: gopro.chapters[0].info.creationTime.getTime() };
-    model = coarseModel(volt, fake, monoRef);
-    method = 'clock';
-    notes.push('No GoPro GPS time: coarse map from the MP4 creation time (camera clock, often wrong).');
   } else {
-    model = makeModel(monoRef, 0, 1);
-    method = 'none';
-    notes.push('No clock information: searching from video t=0.');
+    const cam = cameraClock(gopro, volt, monoRef);
+    if (cam.reason && cam.reason !== 'none') notes.push('No GoPro GPS time, and ' + cam.reason + ': ignored it and searched the whole ride.');
+    else if (!cam.ok) notes.push('No GoPro GPS time and no camera clock: searched the whole ride.');
+    search = Q.searchStart(gopro, volt, monoRef, { skip: opts.searchSkip });
+    if (search.ok) {
+      mode = 'search';
+      model = makeModel(monoRef, search.best.startS, 1);
+      method = 'search';
+      if (cam.ok && volt.clock) {
+        // the camera clock is often hours off (local time labelled UTC): only a cross-check
+        const clockStart = (monoToUtc(volt.clock, monoRef) - cam.ms) / 1000;
+        const d = search.best.startS - clockStart, dh = d - Math.round(d / 3600) * 3600;
+        stats.cameraClock = { startS: clockStart, searchMinusClockS: d };
+        if (Math.abs(dh) < 900) notes.push('The camera clock roughly agrees (' + (Math.abs(d) < 900 ? 'within ' + Math.round(Math.abs(d) / 60) + ' min' : Math.round(d / 3600) + ' h off, a time-zone slip') + ').');
+      }
+    } else if (cam.ok && volt.clock) {
+      mode = 'clock';
+      model = coarseModel(volt, { slope: 1, intercept: cam.ms }, monoRef);
+      method = 'clock';
+      notes.push('No GoPro GPS time and the search could not run (' + search.reason + '): coarse map from the camera clock, often minutes or hours off.');
+    } else {
+      mode = 'none';
+      model = makeModel(monoRef, 0, 1);
+      method = 'none';
+      notes.push('No clock information and the search could not run (' + search.reason + '): the ride is placed at video 0:00.');
+    }
   }
   const coarse = Object.assign({}, model);
-  const coarseSearch = method === 'gnss' || method === 'gnss-gopro+phone-wall' ? 10 : 900;
+  const coarseSearch = mode === 'gnss' ? 10 : mode === 'search' || mode === 'anchor' ? 3 : 900;
 
   // Step 1: speed
   const gs = goproSpeed(gopro);
@@ -295,7 +355,7 @@ function syncRide(gopro, volt, opts) {
   let imu = null;
   const haveImu = gopro.accl && gopro.accl.t.length > 100 && volt.motion && volt.motion.t.length > 100;
   if (opts.imu !== false && haveImu) {
-    const searchS = opts.imuSearchS || (method.indexOf('speed') >= 0 ? 1.5 : coarseSearch);
+    const searchS = opts.imuSearchS || (method.indexOf('speed') >= 0 ? 1.5 : mode === 'search' || mode === 'anchor' ? 2 : coarseSearch);
     imu = imuSync(gopro, volt, model, { searchS, fineS: 1, rate: opts.imuRate || 50, windowS: opts.imuWindowS, minConf: opts.imuMinConf });
     if (imu.ok) {
       const f = imu.fit;
@@ -310,18 +370,80 @@ function syncRide(gopro, volt, opts) {
 
   // Confidence
   let confidence = 'low', score = 0, decidedBy = 'clock';
-  if (imu && imu.ok && imu.fit.windowsUsed >= 5 && imu.fit.residualMs < 40) {
-    confidence = 'high'; decidedBy = 'imu';
-    score = Math.min(1, imu.fit.windowsUsed / 8) * Math.max(0, 1 - imu.fit.residualMs / 80) * (0.5 + 0.5 * scoreOf(imu.global.peak, imu.global.psr));
-  } else if (imu && imu.ok) {
-    confidence = 'medium'; decidedBy = 'imu';
-    score = 0.5 * Math.min(1, imu.fit.windowsUsed / 5) * Math.max(0, 1 - imu.fit.residualMs / 150);
-  } else if (speed && method.indexOf('speed') >= 0) {
-    confidence = speed.psr > 3 ? 'medium' : 'low'; decidedBy = 'speed'; score = scoreOf(speed.peak, speed.psr) * 0.7;
-  } else if (method.indexOf('imu-global') >= 0) {
-    confidence = 'medium'; decidedBy = 'imu-global'; score = scoreOf(imu.global.peak, imu.global.psr) * 0.6;
-  } else score = method.indexOf('gnss') === 0 ? 0.2 : 0.05;
+  const imuHigh = !!(imu && imu.ok && imu.fit.windowsUsed >= 5 && imu.fit.residualMs < 40);
+  const imuTight = !!(imu && imu.ok && imu.fit.windowsUsed >= 3 && imu.fit.residualMs < 60);
+  const agreed = [];
+  if (mode === 'gnss') {
+    agreed.push('gnss');
+    if (imu && imu.ok && imu.fit.windowsUsed >= 5 && imu.fit.residualMs < 40) {
+      confidence = 'high'; decidedBy = 'imu';
+      score = Math.min(1, imu.fit.windowsUsed / 8) * Math.max(0, 1 - imu.fit.residualMs / 80) * (0.5 + 0.5 * scoreOf(imu.global.peak, imu.global.psr));
+    } else if (imu && imu.ok) {
+      confidence = 'medium'; decidedBy = 'imu';
+      score = 0.5 * Math.min(1, imu.fit.windowsUsed / 5) * Math.max(0, 1 - imu.fit.residualMs / 150);
+    } else if (speed && method.indexOf('speed') >= 0) {
+      confidence = speed.psr > 3 ? 'medium' : 'low'; decidedBy = 'speed'; score = scoreOf(speed.peak, speed.psr) * 0.7;
+    } else if (method.indexOf('imu-global') >= 0) {
+      confidence = 'medium'; decidedBy = 'imu-global'; score = scoreOf(imu.global.peak, imu.global.psr) * 0.6;
+    } else score = 0.2;
+    if (method.indexOf('speed') >= 0) agreed.push('speed');
+    if (method.indexOf('imu') >= 0) agreed.push('bumps');
+  } else if (mode === 'search' || mode === 'anchor') {
+    // each method's own peak must sit near the final placement to count as agreeing
+    const startNow = monoToVideo(model, monoRef);
+    const votes = [];
+    if (search && search.ok) {
+      for (const k of Object.keys(search.methods)) {
+        const m = search.methods[k], tol = k === 'bumps' ? 0.15 : Q.TOL_S[k];
+        m.agrees = m.localPeakS != null && Math.abs(m.localPeakS - startNow) <= tol;
+        if (m.agrees) votes.push(k);
+      }
+    }
+    if (method.indexOf('speed') >= 0) votes.push('speed');
+    const bumpsOk = votes.indexOf('bumps') >= 0 && imuTight;
+    stats.search = search && search.ok ? { ratio: search.ratio, best: search.best, second: search.second, votes, imuTight, imuHigh, minOverlapS: search.minOverlapS } : null;
+    decidedBy = imu && imu.ok ? 'imu' : search && search.ok ? 'search' : mode;
+    if (mode === 'search') {
+      const unique = search.ratio <= 0.75;
+      if (unique && imuHigh && bumpsOk && votes.length >= 2) confidence = 'high';
+      else if (unique && bumpsOk && votes.length >= 2) confidence = 'medium';
+      if (!unique) notes.push('Not sure: another placement ' + Math.round(search.second.startS - startNow) + ' s away fits almost as well (' + Math.round(search.ratio * 100) + ' %).');
+      else if (!bumpsOk) notes.push('Not sure: the bumps do not confirm this placement.');
+      else if (votes.length < 2) notes.push('Not sure: only one signal supports this placement.');
+      score = Math.max(0, Math.min(1, (0.85 - search.ratio) / 0.35)) * (bumpsOk ? 1 : 0.4) * Math.min(1, votes.length / 3);
+    } else {
+      votes.push('anchor');
+      const edge = search && search.ok && search.atWindowEdge;
+      if (bumpsOk && imuHigh && !edge && votes.length >= 3) confidence = 'high';
+      else if (bumpsOk && !edge) confidence = 'medium';
+      if (!bumpsOk || edge) notes.push('The bumps do not confirm your start mark within ' + (opts.anchorSearchS || 5) + ' s: check it and nudge if needed.');
+      if (search && search.ok && search.outside && search.outside.score > 1.25 * search.best.score) notes.push('The automatic search prefers ' + search.outside.startS.toFixed(1) + ' s for the ride start (Volt START), ' + (search.outside.startS - anchor.startS).toFixed(0) + ' s from your mark.');
+      score = (bumpsOk ? 0.6 : 0.15) + (imuHigh ? 0.3 : 0) + (edge ? -0.1 : 0);
+    }
+    for (const k of votes) if (agreed.indexOf(k) < 0) agreed.push(k);
+    if (mode === 'anchor' && confidence === 'low') {
+      // not confirmed: keep the owner's mark exactly, so a nudge starts from what they chose
+      model = makeModel(monoRef, anchor.startS, 1);
+      method = 'anchor';
+      agreed.length = 0; agreed.push('anchor');
+      decidedBy = 'anchor';
+    }
+  } else {
+    // clock-only or nothing: never better than low
+    if (mode === 'clock') agreed.push('clock');
+    score = 0.05;
+  }
   score = Math.round(Math.max(0, Math.min(1, score)) * 1000) / 1000;
+
+  // plain-language summary for the owner
+  const why = mode === 'gnss' ? '' : mode === 'anchor' ? '' : ' (GoPro had no GPS)';
+  let summary;
+  const ag = agreed.filter((k) => k !== 'gnss' && k !== 'anchor' && k !== 'clock');
+  if (mode === 'gnss') summary = 'Synced from the GoPro’s GPS time' + (ag.length ? ', fine-tuned on ' + listWords(ag) : '') + '.';
+  else if (mode === 'anchor') summary = confidence === 'low' ? 'Using your start mark as you set it; the bumps could not confirm it. Check it and nudge if needed.' : 'Synced from your start mark, fine-tuned on ' + listWords(ag.length ? ag : ['bumps']) + '.';
+  else if (mode === 'search') summary = confidence === 'low' ? 'Best guess only' + why + ': check it and nudge, or mark when you start rolling.' : 'Synced from ' + listWords(ag) + why + '.';
+  else if (mode === 'clock') summary = 'Rough guess from the camera clock' + why + ': check it and nudge, or mark when you start rolling.';
+  else summary = 'Could not sync: mark when you start rolling, or nudge by hand.';
 
   const nudgeMs = opts.nudgeMs || 0;
   const final = shiftModel(model, nudgeMs / 1000);
@@ -334,23 +456,29 @@ function syncRide(gopro, volt, opts) {
     d0_ms: Math.round(rideStartVideoS * 1000 * 10) / 10,
     d1_ppm: Math.round((final.slope - 1) * 1e6 * 100) / 100,
     method,
+    mode,
     confidence,
     score,
     decidedBy,
+    agreed,
+    summary,
     nudge_ms: nudgeMs,
     rideStartVideoS,
     coarse: { videoAtRefS: coarse.videoAtRefS, slope: coarse.slope, rideStartVideoS: monoToVideo(coarse, monoRef) },
     correctionFromCoarseMs: Math.round((monoToVideo(model, monoRef) - monoToVideo(coarse, monoRef)) * 1000),
     stats,
     notes,
+    anchor,
+    search: search && search.ok ? { best: search.best, second: search.second, ratio: search.ratio, methods: search.methods, range: search.range, minOverlapS: search.minOverlapS, outside: search.outside, atWindowEdge: search.atWindowEdge } : search ? { ok: false, reason: search.reason } : null,
     speed: speed ? { against: speed.against, deltaS: speed.deltaS, peak: speed.peak, psr: speed.psr, second: speed.second, score: speed.score, scooter: speed.scooter, curve: speed.curve } : null,
     imu: imu ? { ok: imu.ok, reason: imu.reason, global: imu.global, windows: imu.windows, fit: imu.fit, windowS: imu.windowS } : null,
   };
-  const dec = decidedBy === 'speed' ? speed : decidedBy.indexOf('imu') === 0 ? imu.global : null;
+  const dec = decidedBy === 'speed' ? speed : decidedBy.indexOf('imu') === 0 && imu ? imu.global : null;
   out.peak = dec ? { value: dec.peak, psr: dec.psr, secondBest: dec.second, secondToBestRatio: dec.second ? dec.second.peak / dec.peak : null } : null;
+  if (search && search.ok && (mode === 'search' || mode === 'anchor')) out.peak = Object.assign(out.peak || {}, { search: { score: search.best.score, second: search.second, ratio: search.ratio } });
   return out;
 }
 
 function modelOf(sync) { return makeModel(sync.monoRefMs, sync.videoAtRefS, sync.slope); }
 
-module.exports = { syncRide, fitGoProClock, coarseModel, monoToVideo, videoToMono, makeModel, shiftModel, modelOf, xcorrDelta, imuSync, accelFeature, goproSpeed, voltSpeeds, grid };
+module.exports = { syncRide, cameraClock, fitGoProClock, coarseModel, monoToVideo, videoToMono, makeModel, shiftModel, modelOf, xcorrDelta, imuSync, accelFeature, goproSpeed, voltSpeeds, grid };
