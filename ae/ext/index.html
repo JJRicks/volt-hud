@@ -20,6 +20,7 @@
 <section id="syncSec" class="off">
   <h2>2 · Sync</h2>
   <div id="syncSummary" class="summary"></div>
+  <div id="syncWhy" class="hint"></div>
   <canvas id="cvSpeed" height="90"></canvas>
   <div class="legend"><i class="sw a"></i><span id="lgVolt">Volt</span><i id="lgGoproSw" class="sw g"></i><span id="lgGopro">GoPro GPS speed</span></div>
   <canvas id="cvImu" height="70"></canvas>
@@ -30,6 +31,8 @@
   </div>
   <div class="row"><label>Nudge <input id="nudgeMs" type="number" step="1" value="0"> ms</label><span id="nudgeFr" class="muted"></span><button id="nudgeReset" class="ghost">Reset</button></div>
   <p class="hint">Nudge moves the Volt data later (+) or earlier (−) against the video.</p>
+  <div class="row"><button id="anchorBtn" title="Put the playhead on the frame where you start rolling, then press">I start rolling at the playhead</button><button id="anchorClear" class="ghost" disabled>Auto sync</button><span id="anchorMsg" class="msg"></span></div>
+  <p class="hint">If the sync is unsure: in your comp with the GoPro video, put the playhead where the scooter starts rolling and press the button. Volt fine-tunes it within 5 s.</p>
 </section>
 
 <section>

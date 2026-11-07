@@ -13,7 +13,7 @@
   var LABELS = { speed: 'Speed', power: 'Power', battery: 'Battery', vertical: 'Climb', gmeter: 'G-meter', jerk: 'Jerk', clock: 'Clock', stats: 'Trip stats', coords: 'Coordinates', map: 'Route map' };
 
   var $ = function (id) { return document.getElementById(id); };
-  var state = { videos: [], volt: [], mp4: null, ride: null, sync: null, base: null, strip: null, nudgeMs: 0, compId: null, outDir: null };
+  var state = { videos: [], volt: [], mp4: null, ride: null, sync: null, base: null, strip: null, nudgeMs: 0, compId: null, outDir: null, anchorS: null };
 
   // ---------- settings ----------
   var KEY = 'volthud.panel.v1';
@@ -93,7 +93,7 @@
   function later(fn) { setTimeout(fn, 30); } // let the busy message paint first
   function evalJsx(code, cb) {
     var cs = window.__adobe_cep__;
-    var guard = 'if (typeof VoltHUD === "undefined") $.evalFile(' + JSON.stringify(JSX) + ');';
+    var guard = 'if (typeof VoltHUD === "undefined" || !VoltHUD.playhead) $.evalFile(' + JSON.stringify(JSX) + ');';
     cs.evalScript(guard + code, function (res) {
       var o;
       try { o = JSON.parse(res); } catch (e) { o = { ok: false, error: 'After Effects returned: ' + String(res).slice(0, 200) }; }
@@ -141,8 +141,8 @@
         state.ride = ride;
         state.base = P.rideBase(ride);
         var r = P.runSync(ride, { nudgeMs: 0 });
-        state.sync = r.sync; state.strip = r.strip; state.nudgeMs = 0; state.compId = null;
-        $('nudgeMs').value = 0;
+        state.sync = r.sync; state.strip = r.strip; state.nudgeMs = 0; state.compId = null; state.anchorS = null;
+        $('nudgeMs').value = 0; $('anchorClear').disabled = true; msg('anchorMsg', '');
         var vi = ride.voltInfo;
         msg('loadMsg', 'Loaded in ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s · ' + ride.videos.length + ' chapter' + (ride.videos.length > 1 ? 's' : '') + ' · Volt: ' + (vi.kinds.join(', ') || 'nothing found') +
           (vi.missing.length ? ' · missing ' + vi.missing.join(', ') + ': widgets without data show [no data]' : ''), vi.missing.length ? 'warn' : 'ok');
@@ -204,9 +204,34 @@
   $('nudgeMs').onchange = function () { var v = parseFloat($('nudgeMs').value); setNudge(Number.isFinite(v) ? v : 0); };
   $('nudgeReset').onclick = function () { setNudge(0); };
 
+  // ---------- manual anchor: "I start rolling at the playhead" ----------
+  // Re-runs the sync with the Volt data's first sustained motion put at a video time (fine-tuned within 5 s).
+  function resync(anchorS) {
+    var r = P.runSync(state.ride, { nudgeMs: 0, anchorVideoS: anchorS });
+    state.sync = r.sync; state.strip = r.strip; state.nudgeMs = 0; state.compId = null; state.anchorS = anchorS;
+    $('nudgeMs').value = 0; $('anchorClear').disabled = anchorS == null;
+    showSync(); updateButtons();
+  }
+  $('anchorBtn').onclick = function () {
+    if (!state.ride) { msg('anchorMsg', 'Load and sync first.', 'warn'); return; }
+    var names = state.videos.map(function (f) { return path.basename(f); });
+    if (state.mp4) names.push(path.basename(state.mp4));
+    msg('anchorMsg', 'Reading the playhead…');
+    evalJsx('VoltHUD.playhead(' + JSON.stringify(JSON.stringify(names)) + ')', function (r) {
+      if (!r.ok) { msg('anchorMsg', r.error || 'Could not read the playhead.', 'bad'); return; }
+      try { resync(r.videoS); } catch (e) { msg('anchorMsg', 'Could not sync from the mark: ' + e.message, 'bad'); return; }
+      var where = r.layer ? 'on “' + r.layer + '”' : r.hud ? 'in the Volt HUD comp' : 'comp time (no layer of this GoPro video in “' + r.comp + '”)';
+      msg('anchorMsg', 'Rolling at ' + mmss(r.videoS) + ' · ' + where, r.guess ? 'warn' : state.sync.confidence === 'low' ? 'warn' : 'ok');
+    });
+  };
+  $('anchorClear').onclick = function () { resync(null); msg('anchorMsg', ''); };
+
   function showSync() {
     var s = state.sync;
     var conf = s.confidence || 'none';
+    var words = { gnss: 'GPS time', speed: 'GPS speed', bumps: 'bumps', vibration: 'stops and starts', accel: 'speeding up and braking', anchor: 'your mark', clock: 'camera clock' };
+    $('syncWhy').textContent = (s.summary || '') + (s.agreed && s.agreed.length ? ' Agreeing: ' + s.agreed.map(function (k) { return words[k] || k; }).join(', ') + '.' : '') +
+      (conf === 'low' && s.notes && s.notes.length ? ' ' + s.notes[s.notes.length - 1] : '');
     $('syncSummary').innerHTML = 'Ride starts at <b>' + mmss(s.rideStartVideoS) + '</b> in the video · confidence <b class="conf-' + conf + '">' + conf + '</b> (' + (s.decidedBy || s.method) + ')' +
       (state.nudgeMs ? ' · nudged ' + (state.nudgeMs > 0 ? '+' : '') + state.nudgeMs + ' ms' : '');
     $('nudgeFr').textContent = '= ' + (state.nudgeMs / frameMs()).toFixed(2) + ' frames';
@@ -336,13 +361,13 @@
 
   // ---------- automation (tests) ----------
   // ExtendScript can drive the panel the way a user would: dispatch a CSXSEvent of type
-  // com.jjricks.volthud.run with JSON {videos, volt, mp4?, nudgeMs?, style?, outDir, preview?: {startS, durS}}.
+  // com.jjricks.volthud.run with JSON {videos, volt, mp4?, anchorVideoS?, nudgeMs?, style?, outDir, preview?: {startS, durS}}.
   // The panel loads, syncs, builds and writes a JSON report to <outDir>/panel-run.json (600).
   function automate(ev) {
     var job, rep = { started: new Date().toISOString() };
     try { job = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data; } catch (e) { return; }
     if (!job || !job.outDir || !job.videos || !job.volt) return;
-    function finish() { rep.ui = { load: $('loadMsg').textContent, sync: $('syncSummary').textContent, match: $('match').textContent, mp4: $('mp4Msg').textContent, build: $('buildMsg').textContent, preview: $('pvMsg').textContent, font: $('fontMsg').textContent, nudgeFrames: $('nudgeFr').textContent, clock: $('clockZone').textContent, version: $('ver').textContent };
+    function finish() { rep.ui = { load: $('loadMsg').textContent, sync: $('syncSummary').textContent, syncWhy: $('syncWhy').textContent, match: $('match').textContent, mp4: $('mp4Msg').textContent, build: $('buildMsg').textContent, preview: $('pvMsg').textContent, font: $('fontMsg').textContent, nudgeFrames: $('nudgeFr').textContent, clock: $('clockZone').textContent, version: $('ver').textContent };
       try { P.writePrivate(path.join(job.outDir, 'panel-run.json'), JSON.stringify(rep, null, 1)); } catch (e) {} }
     state.videos = P.expandVideos(job.videos); state.volt = job.volt; state.mp4 = job.mp4 || null;
     if (job.style) applyStyle(job.style);
@@ -351,6 +376,7 @@
       if (!r.ok) throw new Error(r.error);
       state.outDir = job.outDir;
       $('outDir').textContent = 'Files go to ' + state.outDir;
+      if (job.anchorVideoS != null) resync(job.anchorVideoS);
       if (job.nudgeMs) setNudge(job.nudgeMs);
       return doBuild();
     }).then(function (r) {

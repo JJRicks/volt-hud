@@ -6,6 +6,7 @@
 //
 //   VoltHUD.build(specPath)                 -> JSON string {ok, comp, ...} or {ok:false, error}
 //   VoltHUD.addPreview(compId, startS, durS, outPath) -> JSON string (ProRes 4444 + alpha RQ item)
+//   VoltHUD.playhead(namesJson)             -> JSON string {ok, videoS, comp, layer?} (manual sync anchor)
 //   VoltHUD.ping()                          -> JSON string {ok, ae}
 var VoltHUD = (function () {
   var DATA = 'VOLT DATA';
@@ -491,7 +492,31 @@ var VoltHUD = (function () {
     return ser(R);
   }
 
+  // The active comp's playhead as a time in the GoPro video: (comp time - layer start) / stretch on a
+  // layer whose file is one of `namesJson` (the .360 chapters or the reframed MP4); in the Volt HUD comp
+  // (t=0 = first frame) the comp time; otherwise the comp time, flagged as a guess.
+  function playhead(namesJson) {
+    var R = { ok: false };
+    try {
+      var c = app.project ? app.project.activeItem : null;
+      if (!c || !(c instanceof CompItem)) throw new Error('Open the comp with your GoPro video and put the playhead where you start rolling.');
+      var names = eval('(' + namesJson + ')'), hit = null, i, k;
+      R.comp = c.name; R.compTimeS = c.time;
+      for (i = 1; i <= c.numLayers && !hit; i++) {
+        var L = c.layer(i), src = L.source;
+        if (!src || !(src instanceof FootageItem) || !src.file) continue;
+        var nm = decodeURI(src.file.name).toLowerCase();
+        for (k = 0; k < names.length; k++) if (nm === String(names[k]).toLowerCase()) { hit = L; break; }
+      }
+      if (hit) { R.layer = hit.name; R.videoS = ((c.time - hit.startTime) * 100) / (hit.stretch || 100); }
+      else if (c.comment && c.comment.indexOf('Volt HUD overlay') === 0) { R.videoS = c.time; R.hud = true; }
+      else { R.videoS = c.time; R.guess = true; }
+      R.ok = true;
+    } catch (e) { R.error = String(e.message || e); }
+    return ser(R);
+  }
+
   function ping() { return ser({ ok: true, ae: app.version, project: app.project && app.project.file ? app.project.file.name : null }); }
 
-  return { build: build, addPreview: addPreview, ping: ping, ser: ser };
+  return { build: build, addPreview: addPreview, playhead: playhead, ping: ping, ser: ser };
 })();
