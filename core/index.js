@@ -9,4 +9,7 @@ module.exports = {
   timeline: require('./timeline'),
   report: require('./report'),
   signal: require('./util/signal'),
+  strip: require('./sync/strip'),
+  hud: require('./hud/spec'),
+  pipeline: require('./pipeline'),
 };
