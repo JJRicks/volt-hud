@@ -61,13 +61,13 @@ docs/
 
 | # | Milestone | Proves | Needs owner data? |
 |---|---|---|---|
-| **M0** | **AE spike:** a CEP panel loads in AE 26.5 (PlayerDebugMode); `require('gopro-telemetry')` works on Node 17. A JSX bakes a *synthetic* 60-min, 10 Hz, 12-channel timeline into 4 widgets. Measure build time, `.aep` size, AE scrubbing, and **Dynamic Link playback and scrubbing of the long comp in Premiere** (alpha over the reframed MP4). A short ProRes 4444 preview checks the alpha only. Compare with the `sourceData` expression approach | AE can carry hour-long data; Dynamic Link stays usable | No |
+| **M0** | **AE spike:** a CEP panel loads in AE 26.5 (PlayerDebugMode); `require('gopro-telemetry')` works on Node 17. A JSX bakes a *synthetic* 60-min, 10 Hz, 12-channel timeline into 4 widgets. Measure build time, `.aep` size, AE scrubbing, and **Dynamic Link playback and scrubbing of the long comp in Premiere** (alpha over the reframed MP4). A short ProRes 4444 preview checks the alpha only. Compare with the `sourceData` expression approach | AE can carry hour-long data; Dynamic Link stays usable. **Done (Nov 6):** baked keys win ([m0-results.md](m0-results.md)); owner confirmed Dynamic Link of the 60-min comp is stable | No |
 | M1 | **GPMF reader** on a real `.360` (+ chapters): moov reader → gopro-telemetry; list streams and rates; GPS9 vs GPS5; check against the ffmpeg extraction. Check the reframed MP4's t=0 (duration, retained GPMF, audio xcorr) | MAX/MAX2 assumptions | **Yes: sample `.360` + reframed MP4** |
 | M2 | **Volt reader** (combined + sensors + motion), power sign check on a ride with braking, clock fit | Sign convention, clocks | Yes: matching Volt exports |
 | M3 | **Sync v1:** GNSS fits + speed xcorr, CLI HTML report (overlaid curves, confidence) | Seconds-level sync | Yes |
 | M4 | **Sync v2:** windowed IMU + drift fit; synthetic offset/drift tests; one real ride with stomp markers | Frame-level sync | Yes (one marked ride) |
-| M5 | **Comp builder:** all widgets, presets, units, accent, safe areas, 16:9 and 9:16; "Saira HUD" tnum font | The look | No |
-| M6 | **Panel UX:** file pickers, sync strip with nudge, build, add to render queue | End-to-end in AE | — |
+| M5 | **Comp builder:** all widgets, presets, units, accent, safe areas, 16:9 and 9:16; "Saira HUD" tnum font. **Built (Nov 6):** `core/hud/` + `ae/jsx/build-comp.jsx`, see below | The look | No |
+| M6 | **Panel UX:** file pickers, sync strip with nudge, build, add to render queue. **Built (Nov 6):** `ae/ext/`, `core/pipeline.js`; installed as Window > Extensions > Volt HUD | End-to-end in AE | — |
 | M7 | **Mac app:** installs the ZXP via UPIA (self-signed), update check via `gh`, ad-hoc signed. **Built (Nov 6):** `mac/`, see [mac-app.md](mac-app.md). Real UPIA install → update → remove passed with a throwaway bundle id; no GitHub release published yet | Install and update | — |
 | M8 | *Volt PR (separate repo, normal Codex review)*: "Everything (JSON)" export + gyro + time zone; add the new reader | One-file input | — |
 | M9 | *Optional:* Premiere UXP placer (insert the Dynamic Link comp on V2 at the clip start) | Fewer clicks | — |
@@ -161,3 +161,44 @@ Built: `core/` (moov reader, GoPro loader, Volt reader, sync, derivations, timel
 - A ride with a GoPro GPS fix, to exercise speed xcorr on real data.
 - Multi-chapter real files (tested only synthetically).
 - GPS9 on a MAX2 (decoder written; untested on real data).
+
+## M5/M6 status (2026-11-06)
+
+**Comp builder (M5).** `core/hud/spec.js` turns a timeline into a HUD spec (layout per preset and
+aspect, units, accent ramp, decimated keys); `ae/jsx/build-comp.jsx` builds it in the current
+project: a hidden `VOLT DATA` null holds baked slider keys (plus `_ok` hold keys for the grey
+`[no data]` state) and every widget in [hud-design.md](hud-design.md) reads them with small
+expressions. Presets: Focus, Corner, Strip (16:9) and Vertical, Corner, Strip (9:16); HD or 4K;
+metric/imperial; any accent; plate opacity, scale and safe area; coordinates and the route map
+only with the explicit GPS opt-in. The comp is exactly as long as the `.360` timeline.
+
+- Font: **Saira HUD** (`ae/ext/fonts/`, built by `tools/make-font.py`): Saira with tabular digits
+  as the default figures, renamed so AE never mixes it with a stock Saira. OFL 1.1 (no Reserved
+  Font Name), licence beside the files. AE needs it installed: the panel's "Install Saira HUD"
+  button copies it to `~/Library/Fonts`, then restart AE.
+- Synthetic 60-min (10 Hz) build: spec 0.8 s, **build 1.3 s**, 45,909 keys, 57 expressions,
+  3.1 MB `.aep` (the M0 spike: 18 s, 432k keys, 22.8 MB). aerender frames checked by eye
+  (`docs/hud-frame-*.png`, synthetic with fictional coordinates). No expression errors at the
+  start, middle and end.
+- Real sample (`GS011302`, 3:53): spec 33 ms, **build 0.5–0.6 s**, 4,362 keys, 7011 frames
+  (matches the `.360`), checked over the equirect MP4 (outputs only in `owner-data/hud-samples/out/`).
+- Test harness: `ae/test/run-build.sh <spec> <out.aep>` and `ae/test/render-frames.sh`.
+
+**Panel (M6).** `ae/ext/` (CEP 12, Node 17.7) over `core/pipeline.js`: pick the `.360` (sibling
+chapters are added), the Volt export (a folder, or any one file: the rest of that ride's exports
+in the same folder come along, since the combined JSON alone lacks the sensor and motion series),
+and optionally the reframed MP4 (duration plus an audio t=0 check with ffmpeg when present).
+Load and sync runs in the panel (1.4–1.9 s on the sample); the sync strip shows Volt vs GoPro
+speed over the whole video and 20 s of IMU bumps around the strongest window, with a match score
+and ±1 f / ±10 f / ±1 s nudges or a value in ms. Build writes the timeline and spec privately
+(`~/Documents/Volt HUD/<ride>/`, files 600) and calls `VoltHUD.build`. "Add preview to render
+queue" adds at most 30 s with "High Quality with Alpha" (verified: ProRes 4444, `yuva444p12le`).
+
+- Package: `tools/make-zxp.sh <ZXPSignCmd> <workdir> [X.Y.Z]` writes `VoltHUD-X.Y.Z.zxp`
+  (bundle `com.jjricks.volthud`, self-signed, no PlayerDebugMode). 0.1.0 is installed with UPIA
+  in AE 26.5.
+- Checked end to end in AE on the real sample by driving the panel through its automation event
+  (`com.jjricks.volthud.run`, used only by tests): load, sync (11.277 s, medium), a +2-frame nudge,
+  16:9 Focus and 9:16 Corner imperial builds, preview item, a 12 s preview render.
+- Not exercised by hand: the native file dialogs and button clicks (the automation path calls the
+  same functions), multi-chapter real files, a ride without motion data in the panel.

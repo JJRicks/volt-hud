@@ -349,6 +349,7 @@
       rep.load = r;
       if (!r.ok) throw new Error(r.error);
       state.outDir = job.outDir;
+      $('outDir').textContent = 'Files go to ' + state.outDir;
       if (job.nudgeMs) setNudge(job.nudgeMs);
       return doBuild();
     }).then(function (r) {

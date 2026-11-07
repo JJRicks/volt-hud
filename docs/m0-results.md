@@ -17,9 +17,10 @@ Dynamic Link step is manual, for the owner: see [m0-dynamic-link-check.md](m0-dy
     reads 5× faster (8 vs 37 ms for four text layers).
   - **What `sourceData` has going for it:** a tiny `.aep` (279 KB plus the 2.9 MB JSON beside it)
     and a 3 s build. Neither matters at these sizes.
-- **Still open:** Dynamic Link scrubbing and playback in Premiere. The owner checks this by hand
-  ([m0-dynamic-link-check.md](m0-dynamic-link-check.md)). AE renders a frame of this comp in about
-  20 ms, so the comp is unlikely to be the bottleneck.
+- **Dynamic Link: confirmed by the owner (2026-11-06).** The owner linked `hud-baked-60.aep` into
+  Premiere by hand ([m0-dynamic-link-check.md](m0-dynamic-link-check.md)): "definitely working",
+  "stable dynamic link though, looks great". The spike's widgets were deliberately rough; the
+  real look is M5's.
 - **CEP + Node works without PlayerDebugMode.** A self-signed ZXP installed with UPIA loads in
   AE 26.5. It reports **Node v17.7.2** (CEP 12.0.0, Chromium 99, arm64). `require('gopro-telemetry')`
   loads from the bundled `node_modules` in 37 ms, and also by bare name. A smoke call runs it: it

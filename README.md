@@ -12,3 +12,16 @@ Status: shared JS core (M1–M4) and the `volthud` CLI work (`npm test`; `node c
 [`sync-design.md`](docs/sync-design.md) and [`hud-design.md`](docs/hud-design.md).
 
 Third-party code (gopro-telemetry, gpmf-extract: MIT) is installed through npm at build time, never vendored here.
+
+## Using the panel
+
+1. Install `VoltHUD-X.Y.Z.zxp` (the Mac app does this, or UPIA), then in After Effects open
+   **Window > Extensions > Volt HUD**.
+2. If the panel says Saira HUD is not installed, press **Install Saira HUD** (copies four font
+   files to `~/Library/Fonts`) and restart After Effects. Or double-click the files in
+   `ae/ext/fonts/` and install them with Font Book.
+3. Pick the `.360` (any chapter), the Volt export (folder or any of its files) and, if you like,
+   the reframed MP4. Press **Load and sync**.
+4. Check the sync strip; nudge by frames if the bumps don't line up. Choose the look, press
+   **Build comp**, then Dynamic Link the "Volt HUD …" comp into Premiere above the MP4 at its start.
+
