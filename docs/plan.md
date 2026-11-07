@@ -144,7 +144,7 @@ Built: `core/` (moov reader, GoPro loader, Volt reader, sync, derivations, timel
 - Drift was not fitted: the window span is 73 s, under the 300 s minimum. The coarse slope (+92 ppm, from GPSU) is used.
 - The three earliest windows (24–54 s) agree on +2.57 s. This 0.77 s disagreement is **unexplained**; candidates are phone sensor batching at ride start, or the rider handling the phone.
 - The large coarse error suggests GPSU without a fix lags video by about 1.8 s. Treat GPSU-only coarse maps as ±3 s and search the IMU over ±10 s.
-- The scooter-vs-phone GPS speed lag is about 140 ms, but the PSR is low (2.0), so this is not reliable.
+- Scooter speed vs phone GPS speed: the scooter value leads by about 260 ms (PSR 3.2). That is weak evidence; the expected direction was a lag.
 - **Gyro |ω| did not correlate** (helmet/camera vs pocket), so it is not used.
 
 **Reframed MP4 t=0 (`volthud check-mp4`):**
