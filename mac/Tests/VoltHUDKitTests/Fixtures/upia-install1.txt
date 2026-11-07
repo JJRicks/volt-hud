@@ -1,0 +1,2 @@
+Installing extension with file path = /tmp/fixture/installtest-0.0.1.zxp
+Installation Successful for extension with file path = /tmp/fixture/installtest-0.0.1.zxp

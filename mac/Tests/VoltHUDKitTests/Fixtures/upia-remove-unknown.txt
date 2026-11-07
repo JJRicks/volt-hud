@@ -1,0 +1,2 @@
+Removing No Such Extension XYZ
+Failed to remove No Such Extension XYZ, status = -406

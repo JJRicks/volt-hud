@@ -52,7 +52,7 @@ core/      parse/volt.js  parse/gpmf-moov.js  parse/gopro.js (gopro-telemetry)  
 cli/       volthud.js           (volthud sync|timeline|report …)
 ae/        CSXS/manifest.xml  index.html  panel.js  jsx/build-comp.jsx  jsx/widgets/*.jsx  fonts/ (Saira HUD + OFL)
 premiere/  (later) UXP placer
-mac/       VoltHUD.xcodeproj  (SwiftUI installer/updater)
+mac/       Package.swift (SwiftPM: VoltHUDKit, VoltHUD app, volthud-installer CLI)  build-app.sh
 tools/     make-zxp.sh  fixtures/ (synthetic generators; no private ride data)
 docs/
 ```
@@ -68,7 +68,7 @@ docs/
 | M4 | **Sync v2:** windowed IMU + drift fit; synthetic offset/drift tests; one real ride with stomp markers | Frame-level sync | Yes (one marked ride) |
 | M5 | **Comp builder:** all widgets, presets, units, accent, safe areas, 16:9 and 9:16; "Saira HUD" tnum font | The look | No |
 | M6 | **Panel UX:** file pickers, sync strip with nudge, build, add to render queue | End-to-end in AE | — |
-| M7 | **Mac app:** installs the ZXP via UPIA (self-signed), update check via `gh`, ad-hoc signed | Install and update | — |
+| M7 | **Mac app:** installs the ZXP via UPIA (self-signed), update check via `gh`, ad-hoc signed. **Built (Nov 6):** `mac/`, see [mac-app.md](mac-app.md). Real UPIA install → update → remove passed with a throwaway bundle id; no GitHub release published yet | Install and update | — |
 | M8 | *Volt PR (separate repo, normal Codex review)*: "Everything (JSON)" export + gyro + time zone; add the new reader | One-file input | — |
 | M9 | *Optional:* Premiere UXP placer (insert the Dynamic Link comp on V2 at the clip start) | Fewer clicks | — |
 

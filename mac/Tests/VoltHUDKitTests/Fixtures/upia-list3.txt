@@ -1,0 +1,33 @@
+0 extension installed for Adobe Media Encoder (ver 26.5.2)
+ Status                        Extension Name                         Version
+=========  =======================================================  ==========
+
+0 extension installed for After Effects (ver 26.5.0)
+ Status                        Extension Name                         Version
+=========  =======================================================  ==========
+
+0 extension installed for Audition (ver 26.5.0)
+ Status                        Extension Name                         Version
+=========  =======================================================  ==========
+
+0 extension installed for Illustrator 2026 (ver 30.8.2)
+ Status                        Extension Name                         Version
+=========  =======================================================  ==========
+
+0 extension installed for Photoshop 2026 (ver 27.9.0)
+ Status                        Extension Name                         Version
+=========  =======================================================  ==========
+
+1 extension installed for Premiere Pro (ver 26.5.2)
+ Status                        Extension Name                         Version
+=========  =======================================================  ==========
+ Enabled    Timeline Batch Tools                                         0.2.3
+
+0 extension installed for Substance 3D Painter (ver 12.2.0)
+ Status                        Extension Name                         Version
+=========  =======================================================  ==========
+
+0 extension installed for Others
+ Status                        Extension Name                         Version
+=========  =======================================================  ==========
+

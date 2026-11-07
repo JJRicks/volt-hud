@@ -1,0 +1,2 @@
+Removing Volt HUD install test
+Removal Successful for extension Volt HUD install test

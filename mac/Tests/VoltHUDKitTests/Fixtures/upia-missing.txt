@@ -1,0 +1,2 @@
+Installing extension with file path = /tmp/fixture/nope.zxp
+Failed to install, status = -160!
