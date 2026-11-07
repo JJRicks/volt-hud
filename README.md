@@ -7,7 +7,7 @@ A Volt-style data HUD overlay for ride videos. It reads:
 
 auto-syncs them, and renders an alpha-channel overlay in After Effects for use in Premiere on top of the reframed GoPro MP4.
 
-Status: shared JS core (M1–M4) and the `volthud` CLI work (`npm test`; `node cli/volthud.js sync <360...> --volt <dir> --out <dir>`); AE panel next. Start with [`docs/plan.md`](docs/plan.md); details in
+Status: **v0.1.0 alpha, about to be published** as a private GitHub release (After Effects panel `VoltHUD-0.1.0.zxp` + `Volt HUD.app` installer). The shared JS core (M1–M4), the `volthud` CLI (`npm test`; `node cli/volthud.js sync <360...> --volt <dir> --out <dir>`), the comp builder (M5), the panel (M6) and the Mac installer (M7) work. Start with [`docs/plan.md`](docs/plan.md); details in
 [`research.md`](docs/research.md), [`volt-data-formats.md`](docs/volt-data-formats.md),
 [`sync-design.md`](docs/sync-design.md) and [`hud-design.md`](docs/hud-design.md).
 
