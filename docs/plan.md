@@ -203,3 +203,7 @@ queue" adds at most 30 s with "High Quality with Alpha" (verified: ProRes 4444, 
   16:9 Focus and 9:16 Corner imperial builds, preview item, a 12 s preview render.
 - Not exercised by hand: the native file dialogs and button clicks (the automation path calls the
   same functions), multi-chapter real files, a ride without motion data in the panel.
+- 0.1.1 (Everything input): checked on the real sample with the CLI and with the panel's own
+  pipeline calls in Node (load, sync 11.277 s medium, +2-frame nudge, Focus 16:9 and Corner 9:16
+  imperial specs), identical to the older files. Not yet run inside After Effects: AE was open in
+  the owner's session, so the panel was not reinstalled for the automation-event check.
