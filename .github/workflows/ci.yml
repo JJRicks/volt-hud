@@ -1,0 +1,25 @@
+name: core
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci --ignore-scripts
+      - run: npm test
+  node17:
+    # CEP 12 ships Node 17.7: the core must load and run there (no node:test).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 17.7
+      - run: npm ci --ignore-scripts
+      - run: npm run smoke17

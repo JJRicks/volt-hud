@@ -116,3 +116,48 @@ Core decisions made while building M1–M4 (2026-11-06):
 - gopro-telemetry is the only runtime dependency (its npm `license` field says ISC; the LICENSE file is MIT). gpmf-extract and mp4box are not used: our own moov reader feeds gopro-telemetry.
 - Chapters are parsed one by one and placed on the video timeline by our code (offset = sum of earlier video durations), rather than with gopro-telemetry's own merge.
 - See `derivations.md` for smoothing and the sync fallbacks used when the GoPro has no GPS fix.
+
+## Core status and real-sample findings (2026-11-06)
+
+Built: `core/` (moov reader, GoPro loader, Volt reader, sync, derivations, timeline, HTML report, MP4 t=0 check) and `cli/volthud.js` (`probe`, `sync`, `check-mp4`). Tests run on Node 20 with synthetic fixtures; a Node 17.7 smoke job runs the core as CEP 12 would. Outputs from owner data go only to `work/owner-data/hud-samples/out/`.
+
+**M1 (GPMF reader), sample `GS011302.360` (GoPro MAX):**
+
+- The moov reader's gpmd bytes are identical (SHA-256) to `ffmpeg -map 0:3 -c copy -f data`. That is 234 samples, 2.83 MB, read through the sample tables in under 1 s.
+- Streams and rates: ACCL 202 Hz, GYRO 809 Hz, MAGN 25 Hz, GPS5 18 Hz, CORI/GRAV/IORI 29.97 Hz, plus SHUT, WBAL, WRGB, ISOE, UNIF, DISP, WNDM, MWET and AALP. There is **no GPS9 on the original MAX**; GPS5 + GPSU.
+- **The camera never got a GPS fix:** GPSF = 0 and GPSP = 9999 in all 234 payloads, and GPS5 speed is 0 throughout. GPSU still advances (receiver time): 00:36:23.910 to 00:40:17.935 UTC.
+- The GPSU-vs-cts fit has a residual RMS of 60 ms (median 16 ms) and a slope of −92 ppm. The first payload is about 0.9 s off.
+- So **GoPro speed cross-correlation was impossible on this sample**. Sync used GPSU → coarse, then IMU.
+
+**M2 (Volt reader):**
+
+- The phone GNSS clock fit has RMS 2 ms and slope 1.0000000. The phone wall clock runs 1264 ms ahead of GNSS.
+- Power sign: under `POSITIVE_IS_DRAW`, V×A was negative in 74 % of hard-braking samples (gLon < −0.1 g) and positive in 98 % of accelerating ones. The graph convention holds.
+- Drawn/regenerated energy from the timeline (25.1 / 2.8 Wh) matches the app's summary (25.5 / 2.7 Wh).
+
+**M3/M4 (sync):**
+
+- **Coarse** (GPSU vs phone GNSS): ride START at video t = 9.460 s.
+- **IMU** (|accel| windows): START at 11.277 s, a correction of **+1.817 s**. That is consistent with the owner's "about 11 s".
+- Global IMU peak: NCC 0.21, PSR 7.0. Second-best peak at −7.1 s (NCC 0.07, ratio 0.34). Confidence **medium**, score 0.32.
+- Four of 11 windows were kept: +1.80, +1.80, +1.87 and +1.86 s, plus one early window at +2.57 s that was rejected. **Residual 28 ms.**
+- Drift was not fitted: the window span is 73 s, under the 300 s minimum. The coarse slope (+92 ppm, from GPSU) is used.
+- The three earliest windows (24–54 s) agree on +2.57 s. This 0.77 s disagreement is **unexplained**; candidates are phone sensor batching at ride start, or the rider handling the phone.
+- The large coarse error suggests GPSU without a fix lags video by about 1.8 s. Treat GPSU-only coarse maps as ±3 s and search the IMU over ±10 s.
+- The scooter-vs-phone GPS speed lag is about 140 ms, but the PSR is low (2.0), so this is not reliable.
+- **Gyro |ω| did not correlate** (helmet/camera vs pocket), so it is not used.
+
+**Reframed MP4 t=0 (`volthud check-mp4`):**
+
+- The GoPro Player equirect export has **no gpmd track** (GPMF not retained).
+- Audio: the AAC is **bit-identical**. NCC 1.000 at 0 ms lag in both the first 10 s and the 10 s ending 2 s before the end, so the MP4 shares the `.360`'s t=0 with no drift.
+- Video: the MP4 has 7010 frames (233.900 s). The `.360` has 7011 frames on lens track 0 and **7010 on lens track 1**, so the stitched export ends with the shorter lens track. The missing frame is at the end, not the start (inferred from audio and frame counts; not compared frame by frame).
+- A cheap per-frame mean-luma comparison (`--video`) was too flat to match between fisheye and equirect.
+- Conclusion: the timeline's t=0 (the `.360`'s first frame) is the MP4's t=0.
+
+**Still open:**
+
+- One ride with stomp markers to measure the IMU's absolute accuracy and drift over a long ride.
+- A ride with a GoPro GPS fix, to exercise speed xcorr on real data.
+- Multi-chapter real files (tested only synthetically).
+- GPS9 on a MAX2 (decoder written; untested on real data).

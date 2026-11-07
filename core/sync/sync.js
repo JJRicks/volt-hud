@@ -82,8 +82,11 @@ function onVideo(model, sig) { return { t: sig.t.map((m) => monoToVideo(model, m
 function xcorrDelta(ref, mov, rate, searchS, t0, t1, opts) {
   const g = grid(t0, t1, rate);
   const maxGap = (opts && opts.maxGap) || 2.5;
-  const a = S.interpAt(ref.t, ref.v, g, maxGap);
-  const b = S.interpAt(mov.t, mov.v, g, maxGap);
+  // high-pass (3 s) so the peak is sharp: smooth speed curves give broad NCC
+  // humps, and changes of speed are what both clocks share
+  const hp = Math.round(rate * ((opts && opts.highPassS) || 3));
+  const a = S.highPass(S.interpAt(ref.t, ref.v, g, maxGap), hp);
+  const b = S.highPass(S.interpAt(mov.t, mov.v, g, maxGap), hp);
   const L = Math.round(searchS * rate);
   const scan = S.nccScan(a, b, -L, L, Math.max(10, rate * 5));
   const pk = S.peakInfo(scan, Math.max(1, Math.round(rate * ((opts && opts.excludeS) || 1))));
@@ -309,7 +312,7 @@ function syncRide(gopro, volt, opts) {
   let confidence = 'low', score = 0, decidedBy = 'clock';
   if (imu && imu.ok && imu.fit.windowsUsed >= 5 && imu.fit.residualMs < 40) {
     confidence = 'high'; decidedBy = 'imu';
-    score = Math.min(1, (imu.fit.windowsUsed / 8)) * Math.max(0, 1 - imu.fit.residualMs / 80) * Math.max(0.5, scoreOf(imu.global.peak, imu.global.psr) + 0.5);
+    score = Math.min(1, imu.fit.windowsUsed / 8) * Math.max(0, 1 - imu.fit.residualMs / 80) * (0.5 + 0.5 * scoreOf(imu.global.peak, imu.global.psr));
   } else if (imu && imu.ok) {
     confidence = 'medium'; decidedBy = 'imu';
     score = 0.5 * Math.min(1, imu.fit.windowsUsed / 5) * Math.max(0, 1 - imu.fit.residualMs / 150);
@@ -318,7 +321,7 @@ function syncRide(gopro, volt, opts) {
   } else if (method.indexOf('imu-global') >= 0) {
     confidence = 'medium'; decidedBy = 'imu-global'; score = scoreOf(imu.global.peak, imu.global.psr) * 0.6;
   } else score = method.indexOf('gnss') === 0 ? 0.2 : 0.05;
-  score = Math.round(score * 1000) / 1000;
+  score = Math.round(Math.max(0, Math.min(1, score)) * 1000) / 1000;
 
   const nudgeMs = opts.nudgeMs || 0;
   const final = shiftModel(model, nudgeMs / 1000);
