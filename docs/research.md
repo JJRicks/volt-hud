@@ -38,12 +38,12 @@ Tags: **[verified]** means checked on this Mac or in source code. **[source]** m
 ### Premiere side
 
 - **UXP (GA):** `project.importFiles([...])` returns only a boolean, so find the new item by diffing the bin ([forum, 2025–26](https://forums.creativeclouddeveloper.com/t/de-facto-way-to-get-projectitem-of-newly-imported-media-in-premiere-pro-uxp/11791)) **[secondary]**. `SequenceEditor.createInsertProjectItemAction(item, time, vTrack, aTrack, limitShift)` (and the overwrite variant) must run inside `project.executeTransaction` ([forum](https://forums.creativeclouddeveloper.com/t/how-to-add-clips-to-a-sequence-using-premiere-pro-uxp-api/8977)) **[secondary]**. So "import the ProRes and place it on V2 at the reframed clip's start" is doable from a small UXP panel.
-- **Dynamic Link:** an AE comp dropped into Premiere keeps alpha and stays live, but playback re-renders through AE. With thousands of keyframes over an hour, expect sluggish scrubbing **[unverified]**. Recommend it for short edits only; **ProRes 4444 is the default**.
+- **Dynamic Link:** an AE comp dropped into Premiere keeps alpha and stays live, but playback re-renders through AE. With thousands of keyframes over an hour, expect sluggish scrubbing **[unverified]**. **Owner decision (Nov 6): Dynamic Link is the main path**; ProRes 4444 is only for short temporary previews. M0 measures Dynamic Link scrubbing on a long comp.
 - **MOGRTs:** data-driven MOGRTs take a spreadsheet for charts. They have no time-series support, so they are **not useful** for a per-frame HUD.
 
 ### Recommendation
 
-A **CEP panel in After Effects** whose Node side runs a host-neutral JS core (parse, sync, derive). It calls **ExtendScript** to build the comp from a normalized timeline file and queue a ProRes 4444 render. The same core runs as a **Node CLI** for tests and batch use. A tiny **Swift Mac app** installs and updates the panel. Later, an optional **Premiere UXP panel** places the render. Full reasoning is in `plan.md`.
+A **CEP panel in After Effects** whose Node side runs a host-neutral JS core (parse, sync, derive). It calls **ExtendScript** to build the comp from a normalized timeline file, which goes into Premiere by Dynamic Link (a short ProRes 4444 render only for previews). The same core runs as a **Node CLI** for tests and batch use. A tiny **Swift Mac app** installs and updates the panel. Later, an optional **Premiere UXP panel** places the comp. Full reasoning is in `plan.md`.
 
 ## 2. Node inside the extension
 
