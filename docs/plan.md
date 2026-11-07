@@ -224,4 +224,12 @@ queue" adds at most 30 s with "High Quality with Alpha" (verified: ProRes 4444, 
   one-decimal readings at 125 pt (widest sampled reading 264 px against the 280 px budget, a dash
   before the ride starts) and 9:16 Corner imperial with whole numbers at 150 pt; no expression errors.
 - 0.1.4 (owner approved Nov 7): sync without GoPro GPS, merged from `claude/sync-no-gps`. Also from the owner's two fresh rides: a robust GoPro clock fit, overlap-weighted search, and a set camera clock narrows the search and flags the wrong ride (docs/sync-design.md, "Camera clock and GPS clock fixes").
-- Sync without GoPro GPS (owner, Nov 7; branch `claude/sync-no-gps`): distrust an unset camera clock, search the whole ride (stops and starts, speeding up and braking, bumps; FFT, overlap at least min(60 s, half the shorter)), honest low when unsure, and a manual anchor (`--anchor-video-s`, panel "I start rolling at the playhead"). Real sample without GPS time: 11.290 s, medium (truth 11.277 s). The panel button has not been run in After Effects yet. See docs/sync-design.md, "No GPS on the GoPro".
+- Sync without GoPro GPS (owner, Nov 7; branch `claude/sync-no-gps`): distrust an unset camera clock, search the whole ride (stops and starts, speeding up and braking, bumps; FFT, overlap at least min(60 s, half the shorter)), honest low when unsure, and a manual anchor (`--anchor-video-s`, panel "I start rolling at the playhead"). Real sample without GPS time: 11.290 s, medium (truth 11.277 s). See docs/sync-design.md, "No GPS on the GoPro".
+- 0.1.4 checked in AE 26.5 (installed with `volthud-installer install`, driven by the automation event, new unsaved
+  project per job, AE quit after): header 0.1.4; the sample 11.277 s medium; the owner's two fresh rides 54.018 s high
+  (2 chapters) and 14.522 s medium; all built with no errors. `VoltHUD.playhead` read 11.3 s on a reframed-MP4 layer
+  starting at 2 s (13.3 s comp time), 11.33 s at 50 % stretch, the comp time with `hud: true` in the Volt HUD comp, and
+  the comp time flagged as a guess in a comp without the video. A start mark at 11.3 s (the Volt START time, not the
+  rolling time) gave low with the note that the search prefers a start 19 s later; marked at 30 s, where the rider
+  starts rolling, the CLI gives 11.290 s, medium, with the search and bumps agreeing. Not run: a real click on the button
+  (the click only reads the playhead and re-syncs, the two halves checked above).
