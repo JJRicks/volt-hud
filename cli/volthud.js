@@ -2,6 +2,7 @@
 'use strict';
 // volthud CLI. Commands:
 //   volthud probe <360...>                         streams, rates, GPS time/fix (JSON)
+//   volthud check-mp4 <360> <mp4>                  t=0 check by audio cross-correlation (needs ffmpeg)
 //   volthud sync <360...> --volt <dir|files> --out <dir> [--nudge-ms N] [--rate 10] [--coords] [--no-imu]
 // Output files are written with mode 600 into a mode-700 directory (ride data is private).
 
@@ -19,6 +20,7 @@ function parseArgs(argv) {
     else if (x === '--rate') a.rate = Number(argv[++i]);
     else if (x === '--coords') a.coords = true;
     else if (x === '--no-imu') a.noImu = true;
+    else if (x === '--video') a.video = true;
     else if (x === '--tz') a.tz = argv[++i];
     else if (x === '-h' || x === '--help') a.help = true;
     else a._.push(x);
@@ -26,7 +28,7 @@ function parseArgs(argv) {
   return a;
 }
 
-const USAGE = 'usage:\n  volthud probe <360...>\n  volthud sync <360...> --volt <dir|files> --out <dir> [--nudge-ms N] [--rate 10] [--coords] [--no-imu] [--tz Area/City]\n';
+const USAGE = 'usage:\n  volthud probe <360...>\n  volthud check-mp4 <360> <mp4> [--video]\n  volthud sync <360...> --volt <dir|files> --out <dir> [--nudge-ms N] [--rate 10] [--coords] [--no-imu] [--tz Area/City]\n';
 
 function writePrivate(file, text) {
   fs.writeFileSync(file, text, { mode: 0o600 });
@@ -82,6 +84,11 @@ async function main() {
   if (!cmd || a.help) { process.stdout.write(USAGE); return; }
   if (cmd === 'probe') return probe(a._);
   if (cmd === 'sync') return sync(a);
+  if (cmd === 'check-mp4') {
+    if (a._.length !== 2) { process.stderr.write(USAGE); process.exit(2); }
+    process.stdout.write(JSON.stringify(require('../core/check-mp4').checkMp4(a._[0], a._[1], { video: !!a.video }), null, 2) + '\n');
+    return;
+  }
   process.stderr.write('unknown command ' + cmd + '\n' + USAGE);
   process.exit(2);
 }
