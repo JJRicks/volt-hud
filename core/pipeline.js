@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { loadGoPro, chapterKey, sortChapters } = require('./parse/gopro');
-const { loadVolt } = require('./parse/volt');
+const { loadVolt, sniffFormat, EVERYTHING_FORMAT } = require('./parse/volt');
 const { syncRide } = require('./sync/sync');
 const { syncStrip } = require('./sync/strip');
 const { buildTimeline } = require('./timeline');
@@ -28,12 +28,24 @@ function expandVideos(files) {
   return sortChapters(all).paths;
 }
 
-// Volt files: a folder, the combined JSON, or the separate CSVs. A picked file brings the other
-// exports of the same ride from its folder (the combined JSON alone lacks the sensor and motion
-// series: docs/volt-data-formats.md section 6), the way a picked chapter brings its siblings.
-const VOLT_RE = /^(.*)-(combined\.json|analysis\.json|sensors\.csv|phone\.csv|motion\.csv|route\.csv)$/i;
+// Volt files: a folder, the one-file Everything export (Volt 1.12.0+), the combined JSON, or the
+// separate CSVs. An Everything file is the whole ride and is used on its own. Any other picked file
+// brings the other exports of the same ride from its folder (the combined JSON alone lacks the sensor
+// and motion series: docs/volt-data-formats.md section 6), the way a picked chapter brings its siblings.
+const VOLT_RE = /^(.*)-(everything\.json|combined\.json|analysis\.json|sensors\.csv|phone\.csv|motion\.csv|route\.csv)$/i;
+function isEverything(file) {
+  return /-everything\.json$/i.test(file) || (/\.json$/i.test(file) && sniffFormat(file) === EVERYTHING_FORMAT);
+}
 function expandVolt(inputs) {
   const list = [].concat(inputs);
+  for (const p of list) {
+    let st = null;
+    try { st = fs.statSync(p); } catch (e) { continue; }
+    if (st.isFile() && isEverything(p)) {
+      const m = VOLT_RE.exec(path.basename(p));
+      return { inputs: [p], rideId: m ? m[1] : path.basename(p).replace(/\.json$/i, '') };
+    }
+  }
   const out = [];
   let rideId = null;
   for (const p of list) {
@@ -59,8 +71,9 @@ function describeVolt(volt) {
   const have = Object.keys(f);
   const d = { files: f, scooter: !!volt.scooter, phoneGps: !!(volt.phone && volt.phone.gps && volt.phone.gps.t.length), motion: !!(volt.motion && volt.motion.t.length), route: !!volt.route, kinds: have };
   d.missing = [];
-  if (!d.scooter) d.missing.push('Sensor CSV (speed, power, battery)');
-  if (!d.motion) d.missing.push('Motion CSV (fine sync)');
+  const one = !!f.everything;
+  if (!d.scooter) d.missing.push(one ? 'scooter journal (speed, power, battery)' : 'Sensor CSV (speed, power, battery)');
+  if (!d.motion) d.missing.push(one ? 'motion samples (fine sync)' : 'Motion CSV (fine sync)');
   return d;
 }
 

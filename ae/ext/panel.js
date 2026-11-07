@@ -121,7 +121,7 @@
     $('fVolt').textContent = names(list); $('fVolt').className = 'file'; $('fVolt').title = list.join('\n');
     updateButtons();
   }
-  $('pickVolt').onclick = function () { setVolt(pick(true, false, 'Choose the Volt export (combined JSON, or the CSVs)', ['json', 'csv'])); };
+  $('pickVolt').onclick = function () { setVolt(pick(true, false, 'Choose the Volt export (the Everything JSON, or the combined JSON and CSVs)', ['json', 'csv'])); };
   $('pickVoltDir').onclick = function () { setVolt(pick(false, true, 'Choose the folder with the Volt export')); };
   $('pickMp4').onclick = function () {
     var f = pick(false, false, 'Choose the reframed MP4 (optional)', ['mp4', 'MP4', 'mov']);

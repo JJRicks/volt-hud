@@ -30,5 +30,17 @@ const { makeRide, gpmfPayload, makeMp4 } = require('../tools/fixtures/synth');
   const spec = core.hud.buildHudSpec(core.pipeline.makeTimeline(ride, core.pipeline.applyNudge(s, 100), { tz: 'America/Boise' }), { preset: 'strip', units: 'imperial' });
   assert.ok(spec.widgets.length === 8 && spec.keyCount > 0);
   assert.ok(html.length > 1000);
+
+  // The one-file Everything export reads into the same structures as the older files of its ride.
+  const evDir = path.join(__dirname, 'fixtures', 'everything');
+  const evNames = fs.readdirSync(evDir);
+  const evFile = path.join(evDir, evNames.find((n) => /-everything\.json$/.test(n)));
+  const ev = core.volt.loadVolt(evFile);
+  const old = core.volt.loadVolt(evNames.filter((n) => !/-everything\.json$/.test(n)).map((n) => path.join(evDir, n)));
+  assert.deepStrictEqual(ev.scooter.series, old.scooter.series);
+  assert.deepStrictEqual(ev.phone, old.phone);
+  assert.deepStrictEqual(ev.motion, old.motion);
+  assert.deepStrictEqual(ev.clock, old.clock);
+  assert.deepStrictEqual(core.pipeline.expandVolt([evFile]).inputs, [evFile]);
   console.log('core smoke OK on Node ' + process.version + ': sync error ' + ((s.rideStartVideoS - 10) * 1000).toFixed(1) + ' ms, ' + s.method);
 })().catch((e) => { console.error(e); process.exit(1); });

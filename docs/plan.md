@@ -69,7 +69,7 @@ docs/
 | M5 | **Comp builder:** all widgets, presets, units, accent, safe areas, 16:9 and 9:16; "Saira HUD" tnum font. **Built (Nov 6):** `core/hud/` + `ae/jsx/build-comp.jsx`, see below | The look | No |
 | M6 | **Panel UX:** file pickers, sync strip with nudge, build, add to render queue. **Built (Nov 6):** `ae/ext/`, `core/pipeline.js`; installed as Window > Extensions > Volt HUD | End-to-end in AE | — |
 | M7 | **Mac app:** installs the ZXP via UPIA (self-signed), update check via `gh`, ad-hoc signed. **Built (Nov 6):** `mac/`, see [mac-app.md](mac-app.md). Real UPIA install → update → remove passed with a throwaway bundle id; no GitHub release published yet | Install and update | — |
-| M8 | *Volt PR (separate repo, normal Codex review)*: "Everything (JSON)" export + gyro + time zone; add the new reader | One-file input | — |
+| M8 | *Volt PR (separate repo, normal Codex review)*: "Everything (JSON)" export + gyro + time zone; add the new reader. **Done in v0.1.1 (Nov 6):** Volt 1.12.0 shipped `volt-ride-everything` v1 (time zone yes, gyro no); `core/parse/volt.js` reads it into the same structures, equivalence-tested ([volt-data-formats.md](volt-data-formats.md) section 7) | One-file input | — |
 | M9 | *Optional:* Premiere UXP placer (insert the Dynamic Link comp on V2 at the clip start) | Fewer clicks | — |
 
 ## Test plan
@@ -185,8 +185,9 @@ only with the explicit GPS opt-in. The comp is exactly as long as the `.360` tim
 - Test harness: `ae/test/run-build.sh <spec> <out.aep>` and `ae/test/render-frames.sh`.
 
 **Panel (M6).** `ae/ext/` (CEP 12, Node 17.7) over `core/pipeline.js`: pick the `.360` (sibling
-chapters are added), the Volt export (a folder, or any one file: the rest of that ride's exports
-in the same folder come along, since the combined JSON alone lacks the sensor and motion series),
+chapters are added), the Volt export (the Everything JSON on its own; or a folder, or any one older
+file: the rest of that ride's exports in the same folder come along, since the combined JSON alone
+lacks the sensor and motion series),
 and optionally the reframed MP4 (duration plus an audio t=0 check with ffmpeg when present).
 Load and sync runs in the panel (1.4–1.9 s on the sample); the sync strip shows Volt vs GoPro
 speed over the whole video and 20 s of IMU bumps around the strongest window, with a match score

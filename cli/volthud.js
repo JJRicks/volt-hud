@@ -3,7 +3,7 @@
 // volthud CLI. Commands:
 //   volthud probe <360...>                         streams, rates, GPS time/fix (JSON)
 //   volthud check-mp4 <360> <mp4>                  t=0 check by audio cross-correlation (needs ffmpeg)
-//   volthud sync <360...> --volt <dir|files> --out <dir> [--nudge-ms N] [--rate 10] [--coords] [--no-imu]
+//   volthud sync <360...> --volt <everything.json|dir|files> --out <dir> [--nudge-ms N] [--rate 10] [--coords] [--no-imu]
 // Output files are written with mode 600 into a mode-700 directory (ride data is private).
 
 const fs = require('fs');
@@ -28,7 +28,7 @@ function parseArgs(argv) {
   return a;
 }
 
-const USAGE = 'usage:\n  volthud probe <360...>\n  volthud check-mp4 <360> <mp4> [--video]\n  volthud sync <360...> --volt <dir|files> --out <dir> [--nudge-ms N] [--rate 10] [--coords] [--no-imu] [--tz Area/City]\n';
+const USAGE = 'usage:\n  volthud probe <360...>\n  volthud check-mp4 <360> <mp4> [--video]\n  volthud sync <360...> --volt <everything.json|dir|files> --out <dir> [--nudge-ms N] [--rate 10] [--coords] [--no-imu] [--tz Area/City]\n';
 
 function writePrivate(file, text) {
   fs.writeFileSync(file, text, { mode: 0o600 });

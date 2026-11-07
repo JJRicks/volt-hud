@@ -1,4 +1,4 @@
-# Volt ride data formats (as of Volt 1.12.0 draft, 2026-11-06)
+# Volt ride data formats (as of Volt 1.12.0, 2026-11-06)
 
 Read from the Volt source at `work/l10n-wt/wt-rel-refresh` (commit `9ea185f6`). File and class names below are in `src/com/jjricks/volt/`. Everything here is **verified from source** unless marked otherwise. Sample files: `tests/l10n/golden/ride-journal.csv` and `tests/l10n/golden/phone-track.csv`.
 
@@ -96,53 +96,51 @@ What it lacks:
 | App version, scooter model, export schema id | Robust parsing |
 | GAP events | Honest "no data" spans |
 
-Today the HUD needs **combined JSON + Sensor CSV + Motion CSV** (or Sensor CSV + Phone raw + Motion raw). The parser will accept those.
+With the older files, the HUD needs **combined JSON + Sensor CSV + Motion CSV** (or Sensor CSV + Phone raw + Motion raw), and the reader accepts those. Since Volt 1.12.0 one **Everything (JSON)** file holds all of it (section 7); ride auto-save keeps only that file.
 
-## 7. Proposed Volt change: one "Everything (JSON)" export
+## 7. Everything (JSON) (`-everything.json`), Volt 1.12.0+
 
-*Proposal only; no Volt code changed.* It would be a new `RideExportFiles.Format.EVERYTHING_JSON` (`-ride.json`), the new `DEFAULT`, and the auto-export's JSON choice. One UTF-8 JSON file. Repeated samples use **columnar arrays**, which keep a 60-minute ride to roughly 10–15 MB.
+What shipped, read from Volt's `docs/ride-export-everything.md` and `RideExportEverything.java` (Volt `origin/main` at 1.12.0). It differs from the HUD's earlier proposal (`volt-ride`, a `scooter.series` object, gyro), which Volt did not build. One UTF-8 JSON file per ride, `ride-<first 8 of id>-everything.json`. Nothing is resampled or rounded: every value stays on its own clock and numbers are written exactly as the recording files hold them. Volt's test rebuilds the scooter journal, the phone journal and the motion file from it byte for byte, less the withheld identifiers.
 
-```jsonc
-{
-  "format": "volt-ride", "formatVersion": 1,
-  "app": {"version": "1.13.0", "build": 49},
-  "ride": {"id": "...", "label": "...", "scooterModel": "UT5 MAX", "scooterId": "<profile uuid>"},
-  "clock": {
-    "timeZone": "America/Boise", "utcOffsetMinutesAtStart": -360,
-    "anchors": [[wallMs, monotonicMs], ...],        // START, each GAP end, STOP
-    "gnssFit": {"slope": 1.0000021, "offsetMs": ..., "rmsMs": 12}  // optional, from GPS fixes
-  },
-  "power": {"formula": "voltage_v*current_a, same report",
-            "direction": [[monotonicMs, "POSITIVE_IS_DRAW"], ...]},
-  "scooter": {
-    "summary": { ...Summary.toJson()... },
-    "series": {                                       // one entry per numeric key, deduped
-      "speed_kmh": {"unit": "km/h", "t": [mono...], "v": [...], "cmd": [...]},
-      "voltage_v": {...}, "current_a": {...}, "power_w": {...}, "battery_percent": {...},
-      "odometer_km": {...}, "trip_km": {...}, "temperature_c": {...}, "driving_mode": {...},
-      "current_sign_state": {...}, "remaining_range_km": {...}
-    },                                                // t = sensor_updated_monotonic_ms; a row only when it changes
-    "text": {"<key>": {"t": [...], "v": [...]}},      // optional non-numeric keys, same dedupe
-    "events": [{"t": mono, "type": "GAP"|"DIRECTION"|"NOTE"|"STOP", "detail": "..."}]
-  },
-  "phone": {
-    "track": { ...Track.toJson() as today... },
-    "gps": {"t": [mono], "utc": [ms], "lat": [], "lon": [], "acc": [], "speed": [], "speedAcc": [],
-            "alt": [], "vAcc": [], "bearing": [], "bearingAcc": []},   // all fixes, including rejected, flagged
-    "pressure": {"t": [mono], "hPa": []},
-    "motion": {"t": [mono], "raw": [[x,y,z]...], "linear": [...], "enu": [...], "quat": [[x,y,z,w]...],
-               "gyro": [[x,y,z]...]},                 // gyro is new, see below
-    "telemetry": {"t": [mono], "speedKmh": [], "powerW": [], "batteryPercent": []},
-    "events": [{"t": mono, "type": "GAP"|"STOP"}]
-  },
-  "privacy": {"omitted": ["scooter_serial", "..."]}
-}
-```
+A **table** is `{"columns": [...], "rows": [[...], ...]}`, one value per column; an empty field is `null`; a field shaped like a JSON number is a number, anything else a string.
 
-Also proposed, each a small Volt change:
+| Key | Value |
+|---|---|
+| `format`, `formatVersion` | `"volt-ride-everything"`, `1`. The HUD checks both first and refuses any other version with a message. Unknown keys are ignored |
+| `rideId`, `app.version` | The ride's id; Volt's version name or `"unknown"` |
+| `timeZone.recorded` | The phone's time zone id at the ride's START (newer rides), else `null`. `timeZone.atExport`: the zone when exported, a hint only |
+| `scooter` | `null` for a phone-only recording, else the parts below |
+| `scooter.summary` | The Analysis JSON (section 2) with `scooterId` set to `null` |
+| `scooter.frames` | Table `frame, wall_ms, monotonic_ms, sensor_rows`: one row per committed frame |
+| `scooter.readings` | `columns`: `sensor_updated_monotonic_ms, numeric, text, unit, source_command, first_frame, last_frame`; `keys`: one row array per sensor key. A row is one run of consecutive frames that repeated the same reading |
+| `scooter.events` | Table of every journal row outside a frame, in order: `after_frame, event`, then the journal's columns `wall_ms` … `details` (START, GAP, HEARTBEAT, RECOVER, DIRECTION, NOTE, RENAME, STOP). START's `key` (profile id) is `null` |
+| `scooter.directions` | Table `monotonic_ms, current_direction` for START and each DIRECTION |
+| `scooter.uncommittedRows`, `unreadableRows` | Counts of rows left out (torn frames, non-schema-1 rows) |
+| `phone` | `null` when there is no phone recording, else the parts below |
+| `phone.journal.events` | One table per phone journal event. Each row starts with `line` (its line number in the phone CSV), then that event's columns in CSV order: GPS `fix_time_utc_ms, fix_monotonic_ms, latitude, longitude, accuracy_m, speed_mps, speed_accuracy_mps, altitude_m, vertical_accuracy_m`; PRESSURE `wall_ms, sensor_monotonic_ms, pressure_hpa`; TELEMETRY `wall_ms, monotonic_ms, speed_kmh, power_w, battery_percent` + three update times; MOTION `wall_ms, monotonic_ms, motion_rows, peak_linear_mps2`; START, GAP, STOP `wall_ms, monotonic_ms`; an unknown event `wall_ms, monotonic_ms, a`…`j` |
+| `phone.motion` | Table with the motion CSV's own header (section 4) as columns, plus `skippedLines`; `null` when motion was off. **No gyroscope** |
+| `phone.track` | `Track.toJson` as in the combined JSON (section 5); `null` when it could not be read |
+| `clock.anchors` | Table `source, event, wall_ms, monotonic_ms`: the START, GAP, RECOVER and STOP pairs of both journals |
+| `privacy` | `withheldKeys` (readings left out: `scooter_serial`, `battery_serial_raw`, `ride_read_raw`, `fault_history_raw`), `withheldRows`, `withheldFields` |
 
-1. **Record the gyroscope** (`TYPE_GYROSCOPE`) into the motion file, and allow **50 Hz** motion (`SENSOR_DELAY_GAME`). Gyro is the best signal for fine sync; 20 Hz caps sync resolution near 50 ms. Cost: about 2.5× the motion file size.
-2. **Record bearing and bearing accuracy** on GPS rows. These give heading for the mini-map and lateral g.
-3. **Store the time zone** at START.
-4. Leave identifiers out by default (`scooter_serial`, Bluetooth addresses), with an "include identifiers" switch for bug reports.
-5. Keep the existing seven formats for compatibility. "Everything" is a superset, not a replacement.
+### How the HUD reads it (`core/parse/volt.js`)
+
+An input is an Everything file when its name ends in `-everything.json` or its `format` field (sniffed from the first 4 KB) is `volt-ride-everything`. It is the whole ride: the panel and the CLI take it on its own, and in a folder that also has the older files of the ride it wins. It is read into exactly the structures the older readers build, so sync, timeline and HUD code do not change:
+
+| Internal | From |
+|---|---|
+| `scooter.series[key]` `{t, v, cmd, unit}` | `scooter.readings.keys`: each run once, `t` = `sensor_updated_monotonic_ms`, only numeric values, deduped by update time (what the Sensor CSV reader's per-frame dedupe gives); withheld keys are absent |
+| `scooter.events`, `directions`, `start`, `stop`, `frames` | `scooter.events` rows, through the same code as the CSV journal's non-frame rows; `frames` = `scooter.frames.rows.length`. `start.profileId` is `null` |
+| `power` | `voltage_v × current_a` from those series, as before |
+| `phone.gps`, `pressure`, `telemetry`, `events`, `wallPairs` | `phone.journal.events` rows merged back into file order by `line`, through the same code as the Phone raw CSV |
+| `motion` | `phone.motion.rows` (same column order as the Motion CSV) |
+| `route` | `phone.track.points`, as from the combined JSON (no `elevation_source`, which nothing downstream uses) |
+| `summary` | `scooter.summary` |
+| `clock` | The same fit: GNSS pairs from the GPS rows, wall pairs from the journals (the anchors are those same pairs) |
+| New: `timeZone`, `appVersion`, `format`, `withheldKeys` | The file's own fields. `timeZone` is not yet used for the HUD clock |
+
+**Equivalence** (`test/everything.test.js`): a synthetic ride written by Volt's own exporter both ways (`tools/fixtures/HudFixture.java` → `test/fixtures/everything/`) gives identical internal structures, sync and timelines. The owner's sample ride, re-exported offline by Volt's exporter, gave a byte-identical copy of the original older files and an Everything file whose sync and timeline match the older files' exactly (private outputs in `work/owner-data/hud-samples/out/everything-check/`, never committed).
+
+### Not in the shipped export (from the earlier proposal)
+
+Gyroscope, 50 Hz motion, GPS bearing, an app build number, scooter model and a precomputed GNSS fit. The time zone did ship (`timeZone.recorded`), as did leaving identifiers out.
