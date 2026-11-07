@@ -93,3 +93,94 @@ test('audioLag finds a known audio offset', () => {
   const r = audioLag(a, b, 0.5);
   assert.ok(Math.abs(r.lagS - 267 / 8000) < 0.0005, 'lag ' + r.lagS);
 });
+
+// ---- no GoPro GPS time: whole-ride search, honest confidence, manual anchor ----
+function noGpsRide(opts) {
+  const r = ride(Object.assign({ withGoproFix: false, speedShocks: true, driftPpm: 20 }, opts));
+  r.gopro.gpsTime = { t: [], utc: [], fix: [], dop: [] };
+  r.gopro.chapters[0].info.creationTime = new Date(Date.UTC(2016, 0, 1)); // unset camera clock
+  return r;
+}
+const LONG = noGpsRide({ durationS: 400, rideS: 900, videoAtStartS: -200, seed: 21 });
+
+test('maskedNcc matches nccScan and ignores NaN', () => {
+  const { maskedNcc } = require('../core/util/fft');
+  const a = new Float64Array(400), b = new Float64Array(250);
+  let s = 3;
+  const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  for (let i = 0; i < 400; i++) a[i] = Math.sin(i / 5) + rnd();
+  for (let i = 0; i < 250; i++) b[i] = a[i + 61] + 0.3 * rnd();
+  a[100] = NaN; b[7] = NaN;
+  const r = maskedNcc(a, b, 30), ref = S.nccScan(a, b, -399, 249, 30);
+  let maxDiff = 0, best = -1;
+  for (let k = 0; k < r.vals.length; k++) {
+    const x = ref.vals[ref.lags.indexOf(-(r.d0 + k))], y = r.vals[k];
+    assert.strictEqual(Number.isFinite(x), Number.isFinite(y));
+    if (Number.isFinite(x)) maxDiff = Math.max(maxDiff, Math.abs(x - y));
+    if (Number.isFinite(y) && r.n[k] >= 150 && (best < 0 || y > r.vals[best])) best = k;
+  }
+  assert.ok(maxDiff < 1e-9, 'diff ' + maxDiff);
+  assert.strictEqual(r.d0 + best, 61); // b[j] = a[j + 61]: b sits 61 samples into a
+});
+
+test('an unset camera clock (2016) is distrusted', () => {
+  const c = Y.cameraClock(LONG.gopro, LONG.volt, LONG.volt.start.mono);
+  assert.strictEqual(c.ok, false);
+  assert.ok(/2016-01-01/.test(c.reason));
+  const ok = Y.cameraClock({ chapters: [{ info: { creationTime: new Date(Date.UTC(2026, 10, 7, 3)) } }] }, LONG.volt, LONG.volt.start.mono);
+  assert.strictEqual(ok.ok, true); // hours off (local time labelled UTC) is still plausible
+});
+
+test('no GPS, ride longer than the clip (starts before, ends after): found within 50 ms', () => {
+  const s = Y.syncRide(LONG.gopro, LONG.volt, {});
+  assert.strictEqual(s.mode, 'search', s.method);
+  assert.ok(Math.abs(s.rideStartVideoS - -200) < 0.05, 'start ' + s.rideStartVideoS);
+  assert.ok(s.confidence === 'high' || s.confidence === 'medium', s.confidence + ' ' + s.notes.join(' / '));
+  assert.ok(s.agreed.indexOf('bumps') >= 0 && s.agreed.indexOf('vibration') >= 0, s.agreed.join(','));
+  assert.ok(s.notes.some((n) => /2016-01-01/.test(n)), s.notes.join(' / '));
+  assert.ok(/GoPro had no GPS/.test(s.summary), s.summary);
+});
+
+test('no GPS, no camera clock, ride starts before the clip', () => {
+  const r = noGpsRide({ durationS: 400, rideS: 500, videoAtStartS: -120, seed: 22 });
+  r.gopro.chapters[0].info.creationTime = null;
+  const s = Y.syncRide(r.gopro, r.volt, {});
+  assert.ok(Math.abs(s.rideStartVideoS - -120) < 0.05, 'start ' + s.rideStartVideoS);
+  assert.notStrictEqual(s.confidence, 'low', s.notes.join(' / '));
+  assert.ok(s.search.minOverlapS === 60);
+});
+
+test('mismatched ride and clip: low, with a note', () => {
+  const a = noGpsRide({ durationS: 400, rideS: 600, videoAtStartS: -100, seed: 31 });
+  const b = noGpsRide({ durationS: 400, rideS: 600, videoAtStartS: -100, seed: 32 });
+  const s = Y.syncRide(a.gopro, b.volt, {});
+  assert.strictEqual(s.confidence, 'low');
+  assert.ok(s.notes.some((n) => /^Not sure/.test(n)), s.notes.join(' / '));
+  assert.ok(/Best guess/.test(s.summary), s.summary);
+});
+
+test('anchor: "I start rolling at t" is fine-tuned within 5 s; a far-off mark stays as set, low', () => {
+  const Q = require('../core/sync/search');
+  const fm = Q.firstMotion(LONG.volt);
+  assert.ok(fm && fm.source === 'scooter');
+  const roll = LONG.truth.videoOfMono(fm.mono);
+  for (const d of [2.5, -4]) {
+    const s = Y.syncRide(LONG.gopro, LONG.volt, { anchorVideoS: roll + d });
+    assert.strictEqual(s.mode, 'anchor');
+    assert.ok(Math.abs(s.rideStartVideoS - -200) < 0.05, 'mark ' + d + ': start ' + s.rideStartVideoS);
+    assert.notStrictEqual(s.confidence, 'low');
+    assert.ok(/your start mark/.test(s.summary), s.summary);
+  }
+  const far = Y.syncRide(LONG.gopro, LONG.volt, { anchorVideoS: roll + 20 });
+  assert.strictEqual(far.confidence, 'low');
+  assert.strictEqual(far.method, 'anchor');
+  // kept exactly where the owner put it: first motion at roll + 20
+  assert.ok(Math.abs(Y.monoToVideo(Y.modelOf(far), fm.mono) - (roll + 20)) < 1e-6);
+  assert.ok(far.notes.some((n) => /automatic search prefers/.test(n)), far.notes.join(' / '));
+});
+
+test('with GoPro GPS time the summary names it', () => {
+  const s = Y.syncRide(R.gopro, R.volt, {});
+  assert.strictEqual(s.mode, 'gnss');
+  assert.ok(/GPS time/.test(s.summary) && s.agreed.indexOf('gnss') === 0, s.summary);
+});

@@ -81,14 +81,18 @@ function buildReport(gopro, volt, sync, timeline) {
   const tiles = [
     ['Ride start in video', f(sync.rideStartVideoS, 3) + ' s'],
     ['Confidence', sync.confidence + ' (' + f(sync.score, 2) + ')'],
-    ['Coarse (GPS time)', f(sync.coarse.rideStartVideoS, 3) + ' s'],
+    ['Signals that agree', esc((sync.agreed || []).join(', ') || '–')],
+    [sync.mode && sync.mode !== 'gnss' ? 'Coarse (' + esc(sync.mode) + ')' : 'Coarse (GPS time)', f(sync.coarse.rideStartVideoS, 3) + ' s'],
     ['Correction', (sync.correctionFromCoarseMs >= 0 ? '+' : '') + sync.correctionFromCoarseMs + ' ms'],
     ['IMU residual', sync.imu && sync.imu.fit ? f(sync.imu.fit.residualMs, 1) + ' ms (' + sync.imu.fit.windowsUsed + ' windows)' : '–'],
     ['Drift', f(sync.d1_ppm, 1) + ' ppm'],
   ];
   sec.push('<div class="tiles">' + tiles.map((t) => '<div class="tile"><div class="k">' + esc(t[0]) + '</div><div class="v">' + esc(t[1]) + '</div></div>').join('') + '</div>');
+  if (sync.summary) sec.push('<p class="method"><b>' + esc(sync.summary) + '</b></p>');
+  if (sync.search && sync.search.best) sec.push('<p class="method">Whole-ride search: best ' + f(sync.search.best.startS, 1) + ' s' + (sync.search.second ? ', next best ' + f(sync.search.second.startS, 1) + ' s at ' + Math.round(sync.search.ratio * 100) + ' % of the best score' : '') + ' (overlap at least ' + f(sync.search.minOverlapS, 0) + ' s). ' +
+    Object.keys(sync.search.methods).map((k) => esc(sync.search.methods[k].label) + (sync.search.methods[k].agrees ? ' agrees' : ' does not agree')).join('; ') + '.</p>');
   sec.push('<p class="method">Method <b>' + esc(sync.method) + '</b>, decided by <b>' + esc(sync.decidedBy) + '</b>.' +
-    (sync.peak ? ' Peak NCC ' + f(sync.peak.value, 3) + ', PSR ' + f(sync.peak.psr, 1) + (sync.peak.secondBest ? '; second-best peak at ' + f(sync.peak.secondBest.deltaS, 2) + ' s (NCC ' + f(sync.peak.secondBest.peak, 3) + ', ratio ' + f(sync.peak.secondToBestRatio, 2) + ')' : '') + '.' : '') + '</p>');
+    (sync.peak && sync.peak.value != null ? ' Peak NCC ' + f(sync.peak.value, 3) + ', PSR ' + f(sync.peak.psr, 1) + (sync.peak.secondBest ? '; second-best peak at ' + f(sync.peak.secondBest.deltaS, 2) + ' s (NCC ' + f(sync.peak.secondBest.peak, 3) + ', ratio ' + f(sync.peak.secondToBestRatio, 2) + ')' : '') + '.' : '') + '</p>');
   if (sync.notes.length) sec.push('<ul class="notes">' + sync.notes.map((n) => '<li>' + esc(n) + '</li>').join('') + '</ul>');
 
   const ride = [timeline.ride.videoStartS, timeline.ride.videoEndS];

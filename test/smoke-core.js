@@ -21,6 +21,13 @@ const { makeRide, gpmfPayload, makeMp4 } = require('../tools/fixtures/synth');
   const volt = core.volt.loadVolt(dir);
   const s = core.sync.syncRide(r.gopro, volt, {});
   assert.ok(Math.abs(s.rideStartVideoS - 10) < 0.05, 'sync ' + s.rideStartVideoS);
+  // no GoPro GPS time: whole-ride search (FFT) and the manual anchor
+  const ng = Object.assign({}, r.gopro, { gpsTime: { t: [], utc: [], fix: [], dop: [] } });
+  const sn = core.sync.syncRide(ng, volt, {});
+  assert.strictEqual(sn.mode, 'search');
+  assert.ok(Number.isFinite(sn.rideStartVideoS) && typeof sn.summary === 'string');
+  const sa = core.sync.syncRide(ng, volt, { anchorVideoS: 30 });
+  assert.strictEqual(sa.mode, 'anchor');
   const tl = core.timeline.buildTimeline(r.gopro, volt, s, {});
   assert.strictEqual(tl.samples, 2000);
   const html = core.report.buildReport(r.gopro, volt, s, tl);

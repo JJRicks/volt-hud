@@ -87,7 +87,8 @@ async function loadRide(videoFiles, voltInputs) {
 }
 
 function runSync(ride, opts) {
-  const sync = syncRide(ride.gopro, ride.volt, { nudgeMs: (opts && opts.nudgeMs) || 0, imu: !(opts && opts.noImu) });
+  // anchorVideoS: "I start rolling at this video time" (manual anchor when the auto-sync is unsure)
+  const sync = syncRide(ride.gopro, ride.volt, { nudgeMs: (opts && opts.nudgeMs) || 0, imu: !(opts && opts.noImu), anchorVideoS: opts && opts.anchorVideoS != null ? opts.anchorVideoS : undefined });
   return { sync, strip: syncStrip(ride.gopro, ride.volt, sync) };
 }
 

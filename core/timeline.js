@@ -117,7 +117,7 @@ function buildTimeline(gopro, volt, sync, opts) {
 
 function syncForTimeline(s) {
   const o = {};
-  for (const k of ['model', 'monoRefMs', 'videoAtRefS', 'slope', 'd0_ms', 'd1_ppm', 'method', 'confidence', 'score', 'decidedBy', 'nudge_ms', 'rideStartVideoS', 'correctionFromCoarseMs', 'notes', 'peak']) o[k] = s[k];
+  for (const k of ['model', 'monoRefMs', 'videoAtRefS', 'slope', 'd0_ms', 'd1_ppm', 'method', 'mode', 'confidence', 'score', 'decidedBy', 'agreed', 'summary', 'anchor', 'nudge_ms', 'rideStartVideoS', 'correctionFromCoarseMs', 'notes', 'peak']) o[k] = s[k];
   o.coarse = s.coarse;
   o.stats = Object.assign({}, s.stats, {
     speed_psr: s.speed ? s.speed.psr : null,
