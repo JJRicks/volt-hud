@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" font-family="Saira, system-ui, sans-serif">
+  <title>Volt HUD mockup, Focus preset, 16:9</title>
+  <defs>
+    <linearGradient id="draw" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#B81B22"/><stop offset="1" stop-color="#FF5A4D"/>
+    </linearGradient>
+    <linearGradient id="scene" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6d8fa8"/><stop offset=".55" stop-color="#a7b4a0"/><stop offset="1" stop-color="#4b4f45"/>
+    </linearGradient>
+  </defs>
+  <!-- stand-in for the reframed GoPro footage -->
+  <rect width="1920" height="1080" fill="url(#scene)"/>
+  <rect x="96" y="54" width="1728" height="972" fill="none" stroke="#ffffff" stroke-opacity=".25" stroke-dasharray="8 8"/>
+  <text x="104" y="80" fill="#ffffff" fill-opacity=".5" font-size="18">5 % safe area</text>
+
+  <!-- clock, top right -->
+  <g transform="translate(1824 120)" text-anchor="end">
+    <rect x="-300" y="-58" width="316" height="112" rx="26" fill="#111211" fill-opacity=".6"/>
+    <text x="0" y="0" fill="#F4F5F0" font-size="54" font-weight="600">14:32:07</text>
+    <text x="0" y="38" fill="#9A9C95" font-size="26">Thu 6 Nov 2026</text>
+  </g>
+
+  <!-- power bar, left -->
+  <g transform="translate(120 560)">
+    <rect x="0" y="0" width="64" height="420" rx="32" fill="#1F201E" fill-opacity=".85"/>
+    <g fill="#3A3B37">
+      <rect x="14" y="44" width="36" height="2"/><rect x="14" y="88" width="36" height="2"/><rect x="14" y="132" width="36" height="2"/>
+      <rect x="14" y="176" width="36" height="2"/><rect x="14" y="220" width="36" height="2"/><rect x="14" y="264" width="36" height="2"/>
+      <rect x="14" y="308" width="36" height="2"/><rect x="14" y="396" width="36" height="2"/>
+    </g>
+    <rect x="3" y="180" width="58" height="194" rx="29" fill="url(#draw)"/>
+    <rect x="0" y="373" width="64" height="2" fill="#9A9C95"/>
+    <rect x="-2" y="120" width="68" height="4" rx="2" fill="#F4F5F0"/>
+    <text x="88" y="384" fill="#F4F5F0" font-size="56" font-weight="700">1,240</text>
+    <text x="88" y="418" fill="#9A9C95" font-size="24">W draw</text>
+  </g>
+
+  <!-- speed + battery, bottom centre -->
+  <g transform="translate(960 820)" text-anchor="middle">
+    <path d="M -130.1 130.1 A 184 184 0 1 1 130.1 130.1" fill="none" stroke="#1F201E" stroke-opacity=".85" stroke-width="18" stroke-linecap="round"/>
+    <path d="M -130.1 130.1 A 184 184 0 0 1 120 -139.5" fill="none" stroke="#E32B2F" stroke-width="18" stroke-linecap="round"/>
+    <text x="0" y="40" fill="#F4F5F0" font-size="150" font-weight="700">27</text>
+    <text x="0" y="88" fill="#9A9C95" font-size="30">km/h</text>
+    <g transform="translate(-170 150)">
+      <g fill="#5FCB7E">
+        <rect x="0" y="0" width="29" height="18" rx="6"/><rect x="34" y="0" width="29" height="18" rx="6"/><rect x="68" y="0" width="29" height="18" rx="6"/>
+        <rect x="102" y="0" width="29" height="18" rx="6"/><rect x="136" y="0" width="29" height="18" rx="6"/><rect x="170" y="0" width="29" height="18" rx="6"/>
+      </g>
+      <g fill="#2A2B28"><rect x="204" y="0" width="29" height="18" rx="6"/><rect x="238" y="0" width="29" height="18" rx="6"/><rect x="272" y="0" width="29" height="18" rx="6"/><rect x="306" y="0" width="29" height="18" rx="6"/></g>
+    </g>
+    <text x="210" y="168" fill="#F4F5F0" font-size="26" font-weight="600" text-anchor="start">62 %</text>
+  </g>
+
+  <!-- g-meter + jerk, bottom right -->
+  <g transform="translate(1660 820)">
+    <circle r="110" fill="#111211" fill-opacity=".6" stroke="#3A3B37" stroke-width="2"/>
+    <circle r="55" fill="none" stroke="#3A3B37" stroke-width="1.5"/>
+    <path d="M -110 0 H 110 M 0 -110 V 110" stroke="#3A3B37" stroke-width="1.5"/>
+    <polyline points="0,0 6,-8 14,-18 22,-26 26,-30" fill="none" stroke="#E32B2F" stroke-opacity=".5" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="26" cy="-30" r="10" fill="#F4F5F0"/>
+    <text x="0" y="150" fill="#9A9C95" font-size="24" text-anchor="middle">0.21 g</text>
+    <g transform="translate(-110 178)">
+      <rect width="220" height="10" rx="5" fill="#1F201E" fill-opacity=".85"/>
+      <rect x="110" width="38" height="10" rx="5" fill="#E8A23A"/>
+      <rect x="109" y="-4" width="2" height="18" fill="#9A9C95"/>
+    </g>
+    <text x="0" y="222" fill="#9A9C95" font-size="20" text-anchor="middle">jerk</text>
+  </g>
+
+  <!-- vertical rate, right of speed -->
+  <g transform="translate(1290 800)">
+    <path d="M 0 -40 L 22 0 L 8 0 L 8 34 L -8 34 L -8 0 L -22 0 Z" fill="#8FC2FF"/>
+    <text x="40" y="12" fill="#F4F5F0" font-size="40" font-weight="600">+14</text>
+    <text x="40" y="44" fill="#9A9C95" font-size="22">m/min · 4 %</text>
+  </g>
+
+  <!-- ride stats strip, bottom left above safe line -->
+  <text x="120" y="1012" fill="#F4F5F0" fill-opacity=".9" font-size="26">Trip 4.2 km · 12:31 · max 31 km/h</text>
+</svg>
