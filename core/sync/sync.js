@@ -417,7 +417,7 @@ function syncRide(gopro, volt, opts) {
       if (bumpsOk && imuHigh && !edge && votes.length >= 3) confidence = 'high';
       else if (bumpsOk && !edge) confidence = 'medium';
       if (!bumpsOk || edge) notes.push('The bumps do not confirm your start mark within ' + (opts.anchorSearchS || 5) + ' s: check it and nudge if needed.');
-      if (search && search.ok && search.outside && search.outside.score > 1.25 * search.best.score) notes.push('The automatic search prefers ' + search.outside.startS.toFixed(1) + ' s for the ride start (Volt START), ' + (search.outside.startS - anchor.startS).toFixed(0) + ' s from your mark.');
+      if (search && search.ok && search.outside && search.outside.score > 1.25 * search.best.score) notes.push('The automatic search prefers ' + search.outside.startS.toFixed(1) + ' s for the ride start (Volt START), ' + Math.abs(search.outside.startS - anchor.startS).toFixed(0) + ' s ' + (search.outside.startS > anchor.startS ? 'later' : 'earlier') + ' than your mark puts it.');
       score = (bumpsOk ? 0.6 : 0.15) + (imuHigh ? 0.3 : 0) + (edge ? -0.1 : 0);
     }
     for (const k of votes) if (agreed.indexOf(k) < 0) agreed.push(k);

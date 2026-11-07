@@ -89,6 +89,24 @@ low    = clock only
 
 **Manual nudge:** the AE panel shows a strip of GoPro speed against Volt speed and IMU features, plus a ±frame nudge and a ±10 s slider. It also offers "mark a moment": the user scrubs to a clear bump or start in the video and taps the same spike on the Volt graph. The nudge is stored in the sync file, so rebuilding the comp keeps it.
 
+## No GPS on the GoPro (implemented Nov 7, `core/sync/search.js`)
+
+Sometimes the GoPro never gets GPS time (no GPSU/GPS9 UTC at all). The camera clock is then the only clock, and an unset one says 2016-01-01.
+
+1. **Distrust a bad camera clock:** a creation time before 2020, or more than 2 days from the ride's UTC span, is ignored with a note. A plausible clock is only a cross-check (it is often hours off), never a search limit.
+2. **Search every placement** where ride and clip overlap by at least `min(60 s, half the shorter of the two)`. Rides can start before the clip and end after it. Each signal is a masked normalised cross-correlation over every lag, computed by FFT (`core/util/fft.js`), so a 1-hour ride takes about 0.5 s:
+   - **stops and starts:** GoPro vibration (4 s rolling RMS of high-passed |accel|, log) against scooter speed (phone GPS speed as a fallback), 2 Hz;
+   - **speeding up and braking:** GoPro gravity-removed horizontal acceleration (GRAV, with its axis order and signs matched to ACCL automatically) against |d speed/dt|, 5 Hz;
+   - **bumps:** the existing shock feature plus envelope, 25 Hz.
+   The curves are z-scored over the plausible range and summed. Speed-based curves get ±2 s of tolerance (BLE lag), bumps ±0.1 s. The best placement is refined by the windowed IMU sync within ±2 s.
+3. **Confidence:** `ratio` = the next-best placement (a local maximum at least 3 s away) over the best. **medium** needs ratio ≤ 0.75, the bump peak within 0.15 s of the result, IMU windows that agree (at least 3 windows, residual under 60 ms) and at least two agreeing signals. **high** also needs the usual IMU criteria (at least 5 windows, under 40 ms). Anything else is **low**, with a note that says why.
+4. **Manual anchor** (`anchorVideoS`, CLI `--anchor-video-s`, panel "I start rolling at the playhead"): the Volt data's first sustained motion (speed at least 3 km/h for 3 s) is placed at that video time and refined within ±5 s. If the bumps do not confirm it, the mark is kept exactly as set, at low, and the note says where the automatic search would put the ride.
+5. **Summary:** each result has `mode`, `agreed` (the signals that agree) and `summary`, a sentence for the owner, e.g. "Synced from stops and starts, speeding up and braking and bumps (GoPro had no GPS)."
+
+The speeding-up/braking vote stays because it measurably helped on the owner's sample. On the full clip and four trimmed versions, it lifted two results from low to medium and fixed one wrong placement. Synthetic rides have no GRAV, so it does not run there. All negative controls (time-reversed Volt or GoPro data, unrelated synthetic rides) came back low.
+
+Real sample (GS011302, GPS time removed, truth 11.277 s): found at 11.290 s, medium (stops and starts, speeding up and braking, bumps; ratio 0.59). With the clip trimmed to 60–200 s, the ride is longer than the clip: found at −48.71 s (truth −48.723 s), medium.
+
 ## Chapters and the reframed MP4
 
 - **Chapters** `GS01xxxx.360`, `GS02xxxx.360`, … share the 4-digit file number after the chapter prefix. Concatenate them in chapter order into one virtual timeline: chapter k starts at the sum of the earlier video durations. gopro-telemetry accepts an array of `{rawData, timing}` for this. The last ~1–2 s of a chapter often lacks GPMF, so leave that gap open; do not interpolate across it.

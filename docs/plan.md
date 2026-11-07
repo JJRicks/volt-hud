@@ -223,3 +223,4 @@ queue" adds at most 30 s with "High Quality with Alpha" (verified: ProRes 4444, 
   the automation event, new unsaved project, AE quit after): header 0.1.3; 16:9 Focus builds with
   one-decimal readings at 125 pt (widest sampled reading 264 px against the 280 px budget, a dash
   before the ride starts) and 9:16 Corner imperial with whole numbers at 150 pt; no expression errors.
+- Sync without GoPro GPS (owner, Nov 7; branch `claude/sync-no-gps`, not released): distrust an unset camera clock, search the whole ride (stops and starts, speeding up and braking, bumps; FFT, overlap at least min(60 s, half the shorter)), honest low when unsure, and a manual anchor (`--anchor-video-s`, panel "I start rolling at the playhead"). Real sample without GPS time: 11.290 s, medium (truth 11.277 s). The panel button has not been run in After Effects yet. See docs/sync-design.md, "No GPS on the GoPro".

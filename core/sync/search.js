@@ -186,8 +186,8 @@ function searchStart(gopro, volt, monoRef, opts) {
     used.vibration = 'GoPro vibration vs ' + (sp.source === 'scooter' ? 'scooter' : 'phone GPS') + ' speed';
   }
   if (sp && skip.indexOf('accel') < 0) {
-    // accel vs |dv/dt|, 5 Hz. Kept as a vote: on the owner's sample it turned two of five trimmed
-    // clips from low to medium and fixed one wrong placement; it needs the GRAV stream.
+    // accel vs |dv/dt|, 5 Hz. Kept as a vote: on the owner's sample it turned two trimmed
+    // clips from low to medium and fixed one wrong placement (full clip + 4 trims); needs GRAV.
     const ra = 5, ha = goproHorizAccel(gopro, ra);
     if (ha) {
       const na = Math.floor(RT * ra) + 1;
