@@ -1,6 +1,6 @@
 {
   "name": "volt-hud",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Volt-style data HUD overlay for GoPro ride videos: shared JS core and volthud CLI",
   "main": "core/index.js",

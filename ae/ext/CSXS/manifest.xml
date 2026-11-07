@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Volt HUD panel for After Effects (CEP 12). Window > Extensions > Volt HUD.
      ExtensionBundleVersion is set by tools/make-zxp.sh (plain X.Y.Z); the Mac app expects this bundle id. -->
-<ExtensionManifest Version="12.0" ExtensionBundleId="com.jjricks.volthud" ExtensionBundleVersion="0.1.3"
+<ExtensionManifest Version="12.0" ExtensionBundleId="com.jjricks.volthud" ExtensionBundleVersion="0.1.4"
   ExtensionBundleName="Volt HUD" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="com.jjricks.volthud.panel" Version="0.1.3"/>
+    <Extension Id="com.jjricks.volthud.panel" Version="0.1.4"/>
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
