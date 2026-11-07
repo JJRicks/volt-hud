@@ -1,0 +1,17 @@
+{
+  "name": "volt-hud",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Volt-style data HUD overlay for GoPro ride videos: shared JS core and volthud CLI",
+  "main": "core/index.js",
+  "bin": { "volthud": "cli/volthud.js" },
+  "engines": { "node": ">=17.7" },
+  "scripts": {
+    "test": "node --test test/",
+    "smoke17": "node test/smoke-core.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "gopro-telemetry": "1.2.11"
+  }
+}
