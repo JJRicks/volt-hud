@@ -35,3 +35,13 @@ test('nudge = pure shift; strip and timeline follow; spec builds', () => {
   const sp = P.buildHudSpec(tl, { preset: 'corner' });
   assert.strictEqual(sp.comp.frames, Math.round(240 * 29.97));
 });
+
+test('a picked Volt file brings the other exports of the same ride', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'vh-vf-'));
+  for (const n of ['ride-aaa-combined.json', 'ride-aaa-sensors.csv', 'ride-aaa-motion.csv', 'ride-bbb-sensors.csv', 'notes.txt']) fs.writeFileSync(path.join(d, n), '');
+  const r = P.expandVolt([path.join(d, 'ride-aaa-combined.json')]);
+  assert.strictEqual(r.rideId, 'ride-aaa');
+  assert.deepStrictEqual(r.inputs.map((f) => path.basename(f)), ['ride-aaa-combined.json', 'ride-aaa-motion.csv', 'ride-aaa-sensors.csv']);
+  assert.deepStrictEqual(P.expandVolt([d]).inputs, [d]);
+  assert.deepStrictEqual(P.expandVolt([path.join(d, 'notes.txt')]).inputs, []);
+});

@@ -28,17 +28,48 @@ function expandVideos(files) {
   return sortChapters(all).paths;
 }
 
-// Volt files: a folder, the combined/"everything" JSON, or the separate CSVs.
+// Volt files: a folder, the combined JSON, or the separate CSVs. A picked file brings the other
+// exports of the same ride from its folder (the combined JSON alone lacks the sensor and motion
+// series: docs/volt-data-formats.md section 6), the way a picked chapter brings its siblings.
+const VOLT_RE = /^(.*)-(combined\.json|analysis\.json|sensors\.csv|phone\.csv|motion\.csv|route\.csv)$/i;
+function expandVolt(inputs) {
+  const list = [].concat(inputs);
+  const out = [];
+  let rideId = null;
+  for (const p of list) {
+    let st = null;
+    try { st = fs.statSync(p); } catch (e) { continue; }
+    if (st.isDirectory()) { if (out.indexOf(p) < 0) out.push(p); continue; }
+    const m = VOLT_RE.exec(path.basename(p));
+    if (!m) continue;
+    rideId = rideId || m[1];
+    if (m[1] !== rideId) continue;
+    let names = [];
+    try { names = fs.readdirSync(path.dirname(p)); } catch (e) { names = [path.basename(p)]; }
+    for (const n of names.sort()) {
+      const k = VOLT_RE.exec(n);
+      const f = path.join(path.dirname(p), n);
+      if (k && k[1] === rideId && out.indexOf(f) < 0) out.push(f);
+    }
+  }
+  return { inputs: out, rideId };
+}
 function describeVolt(volt) {
   const f = volt.files || {};
   const have = Object.keys(f);
-  return { files: f, scooter: !!volt.scooter, phoneGps: !!(volt.phone && volt.phone.gps && volt.phone.gps.t.length), motion: !!(volt.motion && volt.motion.t.length), route: !!volt.route, kinds: have };
+  const d = { files: f, scooter: !!volt.scooter, phoneGps: !!(volt.phone && volt.phone.gps && volt.phone.gps.t.length), motion: !!(volt.motion && volt.motion.t.length), route: !!volt.route, kinds: have };
+  d.missing = [];
+  if (!d.scooter) d.missing.push('Sensor CSV (speed, power, battery)');
+  if (!d.motion) d.missing.push('Motion CSV (fine sync)');
+  return d;
 }
 
 async function loadRide(videoFiles, voltInputs) {
   const videos = expandVideos(videoFiles);
   const gopro = await loadGoPro(videos);
-  const volt = loadVolt(voltInputs);
+  const vi = expandVolt(voltInputs);
+  if (!vi.inputs.length) throw new Error('no Volt export files among the picked files');
+  const volt = loadVolt(vi.inputs, vi.rideId ? { rideId: vi.rideId } : undefined);
   return { videos, gopro, volt, voltInfo: describeVolt(volt) };
 }
 
@@ -74,4 +105,4 @@ function writePrivate(file, text) {
   fs.chmodSync(file, 0o600);
 }
 
-module.exports = { findChapters, expandVideos, loadRide, runSync, applyNudge, makeTimeline, rideBase, writePrivate, buildHudSpec, describeVolt };
+module.exports = { findChapters, expandVideos, expandVolt, loadRide, runSync, applyNudge, makeTimeline, rideBase, writePrivate, buildHudSpec, describeVolt };

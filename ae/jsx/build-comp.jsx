@@ -485,7 +485,7 @@ var VoltHUD = (function () {
       om.applyTemplate('High Quality with Alpha');
       om.file = new File(outPath);
       R.ok = true; R.startS = st; R.durationS = du; R.file = om.file.fsName;
-      try { R.video = om.getSettings(GetSettingsFormat.STRING)['Video Output']; } catch (e2) {}
+      try { var gs = om.getSettings(GetSettingsFormat.STRING); R.format = gs['Format']; R.channels = gs['Channels']; } catch (e2) {}
     } catch (e) { R.error = String(e); }
     return ser(R);
   }

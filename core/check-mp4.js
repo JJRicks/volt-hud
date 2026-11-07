@@ -110,4 +110,4 @@ function checkMp4(file360, fileMp4, opts) {
   };
 }
 
-module.exports = { checkMp4, audioLag };
+module.exports = { checkMp4, audioLag, probeFile };
