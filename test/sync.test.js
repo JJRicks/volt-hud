@@ -131,6 +131,36 @@ test('an unset camera clock (2016) is distrusted', () => {
   assert.strictEqual(ok.ok, true); // hours off (local time labelled UTC) is still plausible
 });
 
+test('GoPro clock fit: bunched fixes and jumping GPSU stamps assume rate 1', () => {
+  // three fixes within 2 s (an owner clip) used to give a -10,989 ppm slope
+  const t = [371.4, 372.4, 373.4], base = Date.UTC(2026, 10, 7, 22, 16, 32);
+  const f = Y.fitGoProClock({ t, utc: [base + 371400, base + 372411, base + 373389], fix: [3, 3, 3], dop: [1, 1, 1] });
+  assert.strictEqual(f.slope, 1);
+  assert.ok(Math.abs(f.intercept - base) < 20, 'intercept off by ' + (f.intercept - base));
+  // GPSU without a fix: a third of the stamps jump by seconds (an owner clip: 145 of 488)
+  const g = { t: [], utc: [], fix: [], dop: [] };
+  for (let i = 0; i < 480; i++) { g.t.push(i); g.utc.push(base + i * 1000 + (i % 3 === 0 ? 4000 + 900 * (i % 7) : 0)); g.fix.push(0); g.dop.push(99); }
+  const h = Y.fitGoProClock(g);
+  assert.ok(Math.abs(h.driftPpm) < 200, 'drift ' + h.driftPpm);
+  assert.ok(Math.abs(h.intercept - base) < 50, 'intercept off by ' + (h.intercept - base));
+  assert.ok(h.dropped >= 150, 'dropped ' + h.dropped);
+});
+
+test('a set camera clock (local time labelled UTC) agrees; with the wrong ride it says so, low', () => {
+  const r = noGpsRide({ durationS: 400, rideS: 600, videoAtStartS: -100, seed: 41 });
+  const video0 = Date.UTC(2026, 10, 7, 0, 0, 0) - -100 * 1000; // synth utc0 is the ride start
+  r.gopro.chapters[0].info.creationTime = new Date(video0 - 7 * 3600e3 + 40e3); // MST, 40 s off
+  const s = Y.syncRide(r.gopro, r.volt, {});
+  assert.ok(Math.abs(s.rideStartVideoS - -100) < 0.05, 'start ' + s.rideStartVideoS);
+  assert.notStrictEqual(s.confidence, 'low', s.notes.join(' / '));
+  assert.ok(s.notes.some((n) => /camera clock agrees/.test(n)), s.notes.join(' / '));
+  // a similar ride recorded 20 minutes later: whatever it finds, the clock disagreement makes it low
+  const other = noGpsRide({ durationS: 400, rideS: 600, videoAtStartS: -100, seed: 41, utc0: Date.UTC(2026, 10, 7, 0, 20, 0) });
+  const w = Y.syncRide(r.gopro, other.volt, {});
+  assert.strictEqual(w.confidence, 'low');
+  assert.ok(w.notes.some((n) => /camera clock disagrees/.test(n)), w.notes.join(' / '));
+});
+
 test('no GPS, ride longer than the clip (starts before, ends after): found within 50 ms', () => {
   const s = Y.syncRide(LONG.gopro, LONG.volt, {});
   assert.strictEqual(s.mode, 'search', s.method);

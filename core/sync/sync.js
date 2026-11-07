@@ -33,10 +33,34 @@ function fitGoProClock(gpsTime) {
     all.push(p);
     if (gpsTime.fix[i] >= 2 && gpsTime.dop[i] < 5) good.push(p);
   }
-  const use = good.length >= 3 ? good : all;
+  // GPSU without a fix jumps by seconds (one owner clip: 145 of 488 stamps over 5 s off), and a few
+  // fixes bunched together give a meaningless slope (3 fixes in 2 s: -10,989 ppm). So: drop stamps
+  // more than 2 s from the median offset, and fit a slope only from at least 10 kept points over
+  // 120 s or more whose drift is physically plausible (under 200 ppm); otherwise assume the camera
+  // clock runs at rate 1 and take the median offset.
+  const clean = (pts) => {
+    if (!pts.length) return pts;
+    const off = pts.map((p) => p[1] - p[0]).sort((a, b) => a - b);
+    const med = off[off.length >> 1];
+    return pts.filter((p) => Math.abs(p[1] - p[0] - med) <= 2000);
+  };
+  const g = clean(good), a = clean(all);
+  const withFix = g.length >= 3;
+  const use = withFix ? g : a;
   if (use.length < 2) return null;
+  const span = use[use.length - 1][0] - use[0][0];
   const f = S.theilSen(use.map((p) => p[0]), use.map((p) => p[1]));
-  return { slope: f.slope, intercept: f.intercept, rmsMs: f.rms, madMs: f.madResidual, n: f.n, withFix: good.length >= 3, driftPpm: (f.slope - 1) * 1e6 };
+  const driftPpm = (f.slope - 1) * 1e6;
+  const dropped = (withFix ? good.length : all.length) - use.length;
+  if (use.length >= 10 && span >= 120000 && Math.abs(driftPpm) < 200) {
+    return { slope: f.slope, intercept: f.intercept, rmsMs: f.rms, madMs: f.madResidual, n: f.n, withFix, driftPpm, dropped, spanS: span / 1000 };
+  }
+  const off = use.map((p) => p[1] - p[0]).sort((x, y) => x - y);
+  const intercept = off[off.length >> 1];
+  const res = use.map((p) => Math.abs(p[1] - p[0] - intercept)).sort((x, y) => x - y);
+  const rms = Math.sqrt(use.reduce((s, p) => s + Math.pow(p[1] - p[0] - intercept, 2), 0) / use.length);
+  return { slope: 1, intercept, rmsMs: rms, madMs: res[res.length >> 1], n: use.length, withFix, driftPpm: 0, dropped, spanS: span / 1000, rateAssumed: true,
+    fittedDriftPpm: Number.isFinite(driftPpm) ? driftPpm : null };
 }
 
 function coarseModel(volt, gfit, monoRef) {
@@ -294,6 +318,24 @@ function syncRide(gopro, volt, opts) {
     if (cam.reason && cam.reason !== 'none') notes.push('No GoPro GPS time, and ' + cam.reason + ': ignored it and searched the whole ride.');
     else if (!cam.ok) notes.push('No GoPro GPS time and no camera clock: searched the whole ride.');
     search = Q.searchStart(gopro, volt, monoRef, { skip: opts.searchSkip });
+    if (search.ok && cam.ok && volt.clock) {
+      // A set camera clock (local time labelled UTC) pins the start to within minutes, modulo the
+      // time zone: search +-3 min around each zone-shifted reading inside the plausible range, and
+      // prefer that unless the whole-ride best is clearly stronger (then the clock is likely wrong
+      // and the disagreement check below marks the result low).
+      const clockStart = (monoToUtc(volt.clock, monoRef) - cam.ms) / 1000, W = 180;
+      let bestW = null;
+      for (let k = -15; k <= 15; k++) for (const m of [0, 1800, 2700]) {
+        const c = clockStart + k * 3600 + m;
+        if (c + W < search.range.loS || c - W > search.range.hiS) continue;
+        const w = Q.searchStart(gopro, volt, monoRef, { lo: c - W, hi: c + W, skip: opts.searchSkip, secondInWindow: true });
+        if (w.ok && (!bestW || w.best.score > bestW.best.score)) { bestW = w; bestW.clockCentreS = c; }
+      }
+      if (bestW && bestW.best.score >= 0.67 * search.best.score) {
+        stats.clockWindow = { centreS: bestW.clockCentreS, halfWidthS: W, wholeRideBestS: search.best.startS };
+        search = bestW;
+      }
+    }
     if (search.ok) {
       mode = 'search';
       model = makeModel(monoRef, search.best.startS, 1);
@@ -301,9 +343,7 @@ function syncRide(gopro, volt, opts) {
       if (cam.ok && volt.clock) {
         // the camera clock is often hours off (local time labelled UTC): only a cross-check
         const clockStart = (monoToUtc(volt.clock, monoRef) - cam.ms) / 1000;
-        const d = search.best.startS - clockStart, dh = d - Math.round(d / 3600) * 3600;
-        stats.cameraClock = { startS: clockStart, searchMinusClockS: d };
-        if (Math.abs(dh) < 900) notes.push('The camera clock roughly agrees (' + (Math.abs(d) < 900 ? 'within ' + Math.round(Math.abs(d) / 60) + ' min' : Math.round(d / 3600) + ' h off, a time-zone slip') + ').');
+        stats.cameraClock = { startS: clockStart, searchMinusClockS: search.best.startS - clockStart };
       }
     } else if (cam.ok && volt.clock) {
       mode = 'clock';
@@ -411,6 +451,19 @@ function syncRide(gopro, volt, opts) {
       else if (!bumpsOk) notes.push('Not sure: the bumps do not confirm this placement.');
       else if (votes.length < 2) notes.push('Not sure: only one signal supports this placement.');
       score = Math.max(0, Math.min(1, (0.85 - search.ratio) / 0.35)) * (bumpsOk ? 1 : 0.4) * Math.min(1, votes.length / 3);
+      if (stats.cameraClock) {
+        // A camera clock set from the phone app is right to within seconds, but it is local time
+        // labelled UTC, so allow whole-hour zones (and :30 / :45 ones). Two similar rides back to
+        // back can line up without any clock (an owner pairing did, 3 signals agreeing), so a
+        // clear disagreement means "probably the wrong ride or video": never better than low.
+        const d = startNow - stats.cameraClock.startS;
+        const resid = Math.min.apply(null, [0, 1800, 2700].map((m) => { const x = (d - m) / 3600; return Math.abs(x - Math.round(x)) * 3600; }));
+        stats.cameraClock.residualS = Math.round(resid);
+        if (resid > 180) {
+          confidence = 'low'; score = Math.min(score, 0.1);
+          notes.push('The camera clock disagrees by about ' + Math.round(resid / 60) + ' min: is this the right ride for this video? If the camera clock was wrong, check the placement and nudge.');
+        } else notes.push('The camera clock agrees' + (Math.abs(d) > 1800 ? ' (after a ' + Math.round(d / 3600) + ' h time-zone difference)' : '') + '.');
+      }
     } else {
       votes.push('anchor');
       const edge = search && search.ok && search.atWindowEdge;

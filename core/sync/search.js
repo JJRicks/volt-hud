@@ -129,6 +129,20 @@ function envelope(x, rate) {
 
 // curve from maskedNcc (placement p of the Volt grid [u0 + k/rate] on the video grid [k/rate])
 // resampled onto the common start axis: start = p/rate - u0.
+// Correlation strength depends on how much data backs it: r over 95 s of overlap is far weaker evidence
+// than the same r over 400 s, and short overlaps throw up spurious high r (an owner ride placed 316 s
+// off this way). Fisher z (atanh r) times sqrt(overlap) is proportional to the significance; the
+// curves are z-scored afterwards, so the constant factor does not matter.
+function significance(c) {
+  let nMax = 0;
+  for (let i = 0; i < c.n.length; i++) if (c.n[i] > nMax) nMax = c.n[i];
+  const vals = new Float64Array(c.vals.length);
+  for (let i = 0; i < vals.length; i++) {
+    const r = c.vals[i];
+    vals[i] = Number.isFinite(r) && nMax > 0 ? Math.atanh(Math.max(-0.999, Math.min(0.999, r))) * Math.sqrt(c.n[i] / nMax) : NaN;
+  }
+  return { d0: c.d0, vals, n: c.n };
+}
 function toAxis(c, rate, u0, sLo, nAxis) {
   const out = new Float64Array(nAxis);
   for (let k = 0; k < nAxis; k++) {
@@ -182,7 +196,7 @@ function searchStart(gopro, volt, monoRef, opts) {
     const r = 2, vib = goproVibration(gopro, r);
     const n = Math.floor(RT * r) + 1;
     const spd = S.interpAt(sp.t, sp.v, gridFrom(u0, n, r), 3).map((x) => Math.log(Math.max(0, x) + 1));
-    curves.vibration = toAxis(maskedNcc(vib, spd, Math.round(minOvS * r)), r, u0, sLo, nAxis);
+    curves.vibration = toAxis(significance(maskedNcc(vib, spd, Math.round(minOvS * r))), r, u0, sLo, nAxis);
     used.vibration = 'GoPro vibration vs ' + (sp.source === 'scooter' ? 'scooter' : 'phone GPS') + ' speed';
   }
   if (sp && skip.indexOf('accel') < 0) {
@@ -192,7 +206,7 @@ function searchStart(gopro, volt, monoRef, opts) {
     if (ha) {
       const na = Math.floor(RT * ra) + 1;
       const dv = S.localLinear(sp.t, sp.v, gridFrom(u0, na, ra), 1.5, 3).slope.map(Math.abs);
-      curves.accel = toAxis(maskedNcc(ha.v, dv, Math.round(minOvS * ra)), ra, u0, sLo, nAxis);
+      curves.accel = toAxis(significance(maskedNcc(ha.v, dv, Math.round(minOvS * ra))), ra, u0, sLo, nAxis);
       used.accel = 'GoPro horizontal acceleration vs speed changes';
     }
   }
@@ -202,7 +216,7 @@ function searchStart(gopro, volt, monoRef, opts) {
     const fa = shockFeature(a.t, accelMag(a.t, a.x, a.y, a.z), 0, Math.floor(T * rb) + 1, rb);
     const fb = shockFeature(pa.t, pa.v, u0, Math.floor(RT * rb) + 1, rb);
     const mo = Math.round(minOvS * rb);
-    const c1 = maskedNcc(fa, fb, mo), c2 = maskedNcc(envelope(fa, rb), envelope(fb, rb), mo);
+    const c1 = significance(maskedNcc(fa, fb, mo)), c2 = significance(maskedNcc(envelope(fa, rb), envelope(fb, rb), mo));
     const vals = new Float64Array(c1.vals.length);
     for (let i = 0; i < vals.length; i++) vals[i] = 0.6 * c1.vals[i] + 0.4 * c2.vals[i];
     curves.bumps = toAxis({ d0: c1.d0, vals }, rb, u0, sLo, nAxis);
@@ -224,7 +238,9 @@ function searchStart(gopro, volt, monoRef, opts) {
   // second best: a local maximum at least 3 s away, anywhere in the plausible range
   const ex = 3 * AXIS_HZ;
   let si = -1;
-  for (let i = 0; i < nAxis; i++) {
+  // opts.secondInWindow: only look for a rival inside [lo, hi] (the camera clock already rules out the rest)
+  const s0 = opts.secondInWindow ? iLo : 0, s1 = opts.secondInWindow ? iHi : nAxis - 1;
+  for (let i = s0; i <= s1; i++) {
     if (!Number.isFinite(comb[i]) || Math.abs(i - bi) <= ex) continue;
     const lm = !(comb[i - 1] > comb[i]) && !(comb[i + 1] > comb[i]);
     if (lm && (si < 0 || comb[i] > comb[si])) si = i;

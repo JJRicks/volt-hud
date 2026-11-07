@@ -93,12 +93,12 @@ low    = clock only
 
 Sometimes the GoPro never gets GPS time (no GPSU/GPS9 UTC at all). The camera clock is then the only clock, and an unset one says 2016-01-01.
 
-1. **Distrust a bad camera clock:** a creation time before 2020, or more than 2 days from the ride's UTC span, is ignored with a note. A plausible clock is only a cross-check (it is often hours off), never a search limit.
+1. **Distrust a bad camera clock:** a creation time before 2020, or more than 2 days from the ride's UTC span, is ignored with a note. A plausible clock is local time labelled UTC, so it is read modulo the time zone (whole hours, plus :30 and :45 zones); see *Camera clock and GPS clock fixes* below.
 2. **Search every placement** where ride and clip overlap by at least `min(60 s, half the shorter of the two)`. Rides can start before the clip and end after it. Each signal is a masked normalised cross-correlation over every lag, computed by FFT (`core/util/fft.js`), so a 1-hour ride takes about 0.5 s:
    - **stops and starts:** GoPro vibration (4 s rolling RMS of high-passed |accel|, log) against scooter speed (phone GPS speed as a fallback), 2 Hz;
    - **speeding up and braking:** GoPro gravity-removed horizontal acceleration (GRAV, with its axis order and signs matched to ACCL automatically) against |d speed/dt|, 5 Hz;
    - **bumps:** the existing shock feature plus envelope, 25 Hz.
-   The curves are z-scored over the plausible range and summed. Speed-based curves get ±2 s of tolerance (BLE lag), bumps ±0.1 s. The best placement is refined by the windowed IMU sync within ±2 s.
+   Each correlation is turned into a significance first, Fisher z (atanh r) times the square root of the overlap, so a high r over a short overlap no longer beats a moderate r over the whole ride. The curves are then z-scored over the plausible range and summed. Speed-based curves get ±2 s of tolerance (BLE lag), bumps ±0.1 s. The best placement is refined by the windowed IMU sync within ±2 s.
 3. **Confidence:** `ratio` = the next-best placement (a local maximum at least 3 s away) over the best. **medium** needs ratio ≤ 0.75, the bump peak within 0.15 s of the result, IMU windows that agree (at least 3 windows, residual under 60 ms) and at least two agreeing signals. **high** also needs the usual IMU criteria (at least 5 windows, under 40 ms). Anything else is **low**, with a note that says why.
 4. **Manual anchor** (`anchorVideoS`, CLI `--anchor-video-s`, panel "I start rolling at the playhead"): the Volt data's first sustained motion (speed at least 3 km/h for 3 s) is placed at that video time and refined within ±5 s. If the bumps do not confirm it, the mark is kept exactly as set, at low, and the note says where the automatic search would put the ride.
 5. **Summary:** each result has `mode`, `agreed` (the signals that agree) and `summary`, a sentence for the owner, e.g. "Synced from stops and starts, speeding up and braking and bumps (GoPro had no GPS)."
@@ -106,6 +106,30 @@ Sometimes the GoPro never gets GPS time (no GPSU/GPS9 UTC at all). The camera cl
 The speeding-up/braking vote stays because it measurably helped on the owner's sample. On the full clip and four trimmed versions, it lifted two results from low to medium and fixed one wrong placement. Synthetic rides have no GRAV, so it does not run there. All negative controls (time-reversed Volt or GoPro data, unrelated synthetic rides) came back low.
 
 Real sample (GS011302, GPS time removed, truth 11.277 s): found at 11.290 s, medium (stops and starts, speeding up and braking, bumps; ratio 0.59). With the clip trimmed to 60–200 s, the ride is longer than the clip: found at −48.71 s (truth −48.723 s), medium.
+
+### Camera clock and GPS clock fixes (Nov 7, from the owner's fresh rides)
+
+Two owner clips from Nov 7 (GS011304 + GS021304 with ride 8556c1fb, GS011305 with ride d5833890) showed three more problems.
+
+- **GPSU without a fix jumps.** On GS011304, 145 of 488 GPSU stamps were more than 5 s off, which skewed the clock fit by 457 ppm. On GS011305, three fixes bunched within 2 s gave a slope of −10,989 ppm and an 8.7 s start (truth about 14.5 s). `fitGoProClock` now drops stamps more than 2 s from the median offset. It fits a slope only from at least 10 points over at least 120 s with drift under 200 ppm; otherwise it assumes rate 1 and takes the median offset.
+- **Short overlaps won the search.** With GPS removed, GS011305 was placed at 330 s, where only about 95 s overlap. The significance weighting above fixed it: 14.530 s, against 14.522 s with GPS time.
+- **Two similar rides back to back line up without a clock.** GS011304's video paired with the *other* ride came out medium, with three signals agreeing. With a set camera clock this is caught now:
+  - the search runs ±3 min around each time-zone-shifted clock reading inside the plausible range, unless the whole-ride best is clearly stronger (window best under 0.67 of it);
+  - a result more than 3 min from the clock (after the zone shift) is always **low**, with "is this the right ride for this video?".
+  - With no clock at all, such a pairing can still come out medium. Only the clock (or GPS) can tell two similar rides apart.
+
+Results (all without GPS time unless noted; truth from GPS time + bumps):
+
+| Case | Before | Now |
+|---|---|---|
+| GS011304, GPS time as recorded | 54.121 s, medium (457 ppm fit) | 54.018 s, high |
+| GS011304, GPS removed | 54.032 s, high | 54.032 s, high |
+| GS011305, GPS time as recorded | 8.731 s, low (3-fix slope) | 14.522 s, medium |
+| GS011305, GPS removed | 330.179 s, low | 14.530 s, low (only 2 bump windows) |
+| GS011304 clip 150–350 s | 90.9 s off, low | 14 ms off, low |
+| GS011305 clips 100–300 / 250–425 s | minutes off, low | still off, low; with a set clock 0.15 s / 4.2 s off, low |
+| Wrong ride, set clock | (not tested) | low, "camera clock disagrees by 6 / 14 min" |
+| Camera clock set but 10 min wrong | (not tested) | placement stays right, low with the disagreement note |
 
 ## Chapters and the reframed MP4
 
