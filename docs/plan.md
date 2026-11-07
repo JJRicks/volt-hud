@@ -219,3 +219,7 @@ queue" adds at most 30 s with "High Quality with Alpha" (verified: ProRes 4444, 
 - 0.1.3: the speed number shows one decimal by default (owner, Nov 7). Style `speedDecimals` (1, or 0
   for whole numbers; the panel's Look › Speed). The text size is set once per ride from its top speed
   (`speedValueSize`: 125 pt for `88.8`, 100 pt once a ride passes 99.5; whole numbers keep 150 pt).
+- 0.1.3 checked in AE 26.5 on the real sample (installed with `volthud-installer install`, driven by
+  the automation event, new unsaved project, AE quit after): header 0.1.3; 16:9 Focus builds with
+  one-decimal readings at 125 pt (widest sampled reading 264 px against the 280 px budget, a dash
+  before the ride starts) and 9:16 Corner imperial with whole numbers at 150 pt; no expression errors.
