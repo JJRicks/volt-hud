@@ -1,0 +1,103 @@
+'use strict';
+const test = require('node:test');
+const assert = require('assert');
+const { buildHudSpec, tzOffsetMin } = require('../core/hud/spec');
+const { normalizeStyle } = require('../core/hud/style');
+const { layoutWidgets, BOX } = require('../core/hud/layout');
+const B = require('../core/hud/bake');
+const { synthTimeline } = require('../tools/fixtures/synth-timeline');
+
+const ALL = { speed: true, power: true, battery: true, vertical: true, gmeter: true, jerk: true, clock: true, stats: true, coords: true, map: true };
+
+test('every preset and aspect keeps widgets inside the safe area without overlaps', () => {
+  for (const aspect of ['16:9', '9:16']) for (const preset of ['focus', 'corner', 'strip', 'vertical']) for (const res of ['hd', '4k']) {
+    const st = normalizeStyle({ aspect, preset, resolution: res, coords: true, widgets: ALL });
+    const L = layoutWidgets(st);
+    const boxes = Object.keys(L.widgets).map((id) => { const w = L.widgets[id]; return { id, x0: w.x, y0: w.y, x1: w.x + w.w * w.k, y1: w.y + w.h * w.k }; });
+    assert.strictEqual(boxes.length, 10, aspect + ' ' + preset);
+    const [sx0, sy0, sx1, sy1] = L.safe;
+    for (const b of boxes) assert.ok(b.x0 >= sx0 - 0.5 && b.y0 >= sy0 - 0.5 && b.x1 <= sx1 + 0.5 && b.y1 <= sy1 + 0.5, `${aspect} ${st.preset} ${res}: ${b.id} outside safe area ${JSON.stringify(b)}`);
+    for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i], b = boxes[j];
+      const ov = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 0.5 && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 0.5;
+      assert.ok(!ov, `${aspect} ${st.preset} ${res}: ${a.id} overlaps ${b.id}`);
+    }
+  }
+});
+
+test('style normalization: 9:16 maps focus to vertical, coords need the opt-in, bad values fall back', () => {
+  assert.strictEqual(normalizeStyle({ aspect: '9:16', preset: 'focus' }).preset, 'vertical');
+  assert.deepStrictEqual(normalizeStyle({ aspect: '9:16' }).comp, [1080, 1920]);
+  assert.strictEqual(normalizeStyle({ widgets: { coords: true, map: true } }).widgets.coords, false);
+  const s = normalizeStyle({ accent: 'nope', scale: 9, plate: 5, units: 'imperial' });
+  assert.strictEqual(s.accent, '#E32B2F'); assert.strictEqual(s.scale, 1.5); assert.strictEqual(s.plate, 0.7);
+  assert.strictEqual(s.vertUnit, 'ft/min'); assert.strictEqual(s.clock24, false);
+  assert.strictEqual(normalizeStyle({ plate: 0 }).plate, 0);
+});
+
+test('decimate stays within tolerance and holds through gaps', () => {
+  const a = []; for (let i = 0; i < 2000; i++) a.push(i > 800 && i < 900 ? null : Math.sin(i / 37) * 20 + (i % 7) * 0.01);
+  const k = B.decimate(a, 10, 0.05);
+  assert.ok(k.t.length < 600, 'keys ' + k.t.length);
+  const at = (t) => { let j = 0; while (j + 1 < k.t.length && k.t[j + 1] <= t) j++; if (j + 1 >= k.t.length || k.t[j] === t) return k.v[j]; return k.v[j] + ((k.v[j + 1] - k.v[j]) * (t - k.t[j])) / (k.t[j + 1] - k.t[j]); };
+  for (let i = 0; i < a.length; i++) if (a[i] !== null) assert.ok(Math.abs(at(i / 10) - a[i]) <= 0.0501, 'sample ' + i);
+  // the key at the first null sample holds the last value (no drift while "no data")
+  const gi = k.t.indexOf(80.1); assert.ok(gi > 0 && Math.abs(k.v[gi] - a[800]) < 1e-9);
+  assert.deepStrictEqual(B.okKeys(a, 10), { t: [0, 80.1, 90], v: [1, 0, 1] });
+  assert.strictEqual(B.okKeys([1, 2, 3], 10), null);
+});
+
+test('smoothing helpers keep nulls and settle', () => {
+  assert.deepStrictEqual(B.maN([1, null, 3, 5], 1), [1, null, 4, 4]);
+  const sp = B.springN(new Array(50).fill(10).concat(new Array(50).fill(20)), 8, 10);
+  assert.ok(Math.abs(sp[99] - 20) < 0.01 && sp[51] < 20 && sp[51] > 10);
+  assert.deepStrictEqual(B.runningMax([null, 2, 1, 5, null, 3]), [null, 2, 2, 5, 5, 5]);
+});
+
+test('time zone offsets', () => {
+  assert.strictEqual(tzOffsetMin('America/Boise', Date.UTC(2026, 10, 7, 0, 36)), -420);
+  assert.strictEqual(tzOffsetMin('America/Boise', Date.UTC(2026, 6, 7, 0, 36)), -360);
+  assert.strictEqual(tzOffsetMin('Asia/Kolkata', Date.UTC(2026, 0, 1)), 330);
+});
+
+test('spec from a 60-minute synthetic timeline: comp length = .360, units, no-data flags, key budget', () => {
+  const tl = synthTimeline({ minutes: 60 });
+  const sp = buildHudSpec(tl, {});
+  assert.strictEqual(sp.comp.frames, Math.round(tl.video.durationS * tl.video.fps));
+  assert.ok(Math.abs(sp.comp.frames / sp.comp.fps - tl.video.durationS) < 1 / sp.comp.fps);
+  assert.ok(sp.keyCount < 120000, 'keys ' + sp.keyCount);
+  assert.ok(sp.channels.spd.ok && sp.channels.spd.ok.v[0] === 0, 'speed starts with no data');
+  assert.strictEqual(sp.channels.clk.ok, null, 'clock always valid');
+  assert.ok(sp.channels.clk.keys.t.length <= 3);
+  // clock is local Boise time: 00:36:22.952Z = 17:36:22.952 MST
+  assert.ok(Math.abs(sp.channels.clk.keys.v[0] - (17 * 3600 + 36 * 60 + 22.952)) < 0.01);
+  const w = Object.fromEntries(sp.widgets.map((x) => [x.id, x]));
+  assert.strictEqual(w.speed.p.unit, 'km/h');
+  assert.ok(!w.coords && !w.map, 'coordinates off by default');
+  const im = buildHudSpec(tl, { units: 'imperial' });
+  const maxK = Math.max(...sp.channels.spd.keys.v), maxM = Math.max(...im.channels.spd.keys.v);
+  assert.ok(Math.abs(maxM / maxK - 0.621371) < 0.01);
+  assert.strictEqual(im.widgets.find((x) => x.id === 'stats').p.distUnit, 'mi');
+  const p = w.power.p;
+  assert.ok(p.scaleDraw >= 1000 && p.scaleDraw <= 6000 && p.scaleDraw % 250 === 0);
+});
+
+test('coords and mini-map only with coordinates, path inside its box', () => {
+  const tl = synthTimeline({ minutes: 5, coords: true });
+  const sp = buildHudSpec(tl, { coords: true, widgets: { map: true } });
+  const map = sp.widgets.find((x) => x.id === 'map');
+  assert.ok(map && map.p.path.length >= 2);
+  for (const [x, y] of map.p.path) assert.ok(x >= 0 && x <= 300 && y >= 0 && y <= 300);
+  assert.ok(sp.channels.lat && sp.channels.mapp);
+  const tl2 = synthTimeline({ minutes: 5 });
+  const sp2 = buildHudSpec(tl2, { coords: true, widgets: { map: true } });
+  assert.ok(sp2.warnings.length === 1 && sp2.widgets.find((x) => x.id === 'map').p.path === null);
+});
+
+test('all-null channel bakes as permanent no data', () => {
+  const tl = synthTimeline({ minutes: 1 });
+  tl.channels.batteryPct = tl.channels.batteryPct.map(() => null);
+  const sp = buildHudSpec(tl, {});
+  assert.strictEqual(sp.channels.bat.valid, false);
+  void BOX;
+});
