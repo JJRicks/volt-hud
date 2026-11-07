@@ -137,7 +137,7 @@ An input is an Everything file when its name ends in `-everything.json` or its `
 | `route` | `phone.track.points`, as from the combined JSON (no `elevation_source`, which nothing downstream uses) |
 | `summary` | `scooter.summary` |
 | `clock` | The same fit: GNSS pairs from the GPS rows, wall pairs from the journals (the anchors are those same pairs) |
-| New: `timeZone`, `appVersion`, `format`, `withheldKeys` | The file's own fields. `timeZone` is not yet used for the HUD clock |
+| New: `timeZone`, `appVersion`, `format`, `withheldKeys` | The file's own fields. Since 0.1.2 `timeZone` (`timeZone.recorded`; `atExport` is ignored) sets the HUD clock's zone unless an explicit zone is given (README, "Clock time zone") |
 
 **Equivalence** (`test/everything.test.js`): a synthetic ride written by Volt's own exporter both ways (`tools/fixtures/HudFixture.java` → `test/fixtures/everything/`) gives identical internal structures, sync and timelines. The owner's sample ride, re-exported offline by Volt's exporter, gave a byte-identical copy of the original older files and an Everything file whose sync and timeline match the older files' exactly (private outputs in `work/owner-data/hud-samples/out/everything-check/`, never committed).
 

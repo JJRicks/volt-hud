@@ -12,6 +12,7 @@ const V = require('../core/parse/volt');
 const P = require('../core/pipeline');
 const { syncRide } = require('../core/sync/sync');
 const { buildTimeline } = require('../core/timeline');
+const H = require('../core/hud/spec');
 
 const DIR = path.join(__dirname, 'fixtures', 'everything');
 const names = fs.readdirSync(DIR);
@@ -96,7 +97,10 @@ test('the same ride syncs and builds the same timeline from either input', () =>
   assert.ok(Math.abs(sa.rideStartVideoS - 7.5) < 1.5, 'sync finds the ride: ' + sa.rideStartVideoS);
   for (const opts of [{ rateHz: 10, coords: true, tz: 'UTC' }, { rateHz: 30 }]) {
     const ta = buildTimeline(gopro, a, sa, opts), tb = buildTimeline(gopro, b, sb, opts);
-    assert.deepStrictEqual(diff(ta, tb, '', [], (p) => p === '.ride.files'), []);
+    // Only the clock zone may differ: the Everything file records one, the old files do not.
+    assert.deepStrictEqual(diff(ta, tb, '', [], (p) => p === '.ride.files' || p === '.tz' || p === '.tzSource'), []);
+    if (opts.tz) assert.ok(ta.tz === 'UTC' && tb.tz === 'UTC' && tb.tzSource === 'explicit');
+    else assert.ok(ta.tz === null && ta.tzSource === null && tb.tz === 'Europe/Lisbon' && tb.tzSource === 'ride');
     assert.ok(ta.channels.speedKmh.filter((x) => x != null).length > 100 && ta.channels.powerW.filter((x) => x != null).length > 100);
   }
 });
@@ -150,4 +154,40 @@ test('partial rides: scooter only, phone only, no motion', () => {
   // Unknown keys are ignored, as the format asks.
   const extra = V.loadVolt(tmpCopy((doc) => { doc.later = { x: 1 }; doc.phone.gyro = { columns: [], rows: [] }; }).f);
   assert.deepStrictEqual(diff(V.loadVolt(EVERYTHING), extra), []);
+});
+
+test('clock zone: the ride\'s recorded zone, an explicit override, the Mac for old exports', () => {
+  const a = V.loadVolt(OLD), b = V.loadVolt(EVERYTHING);
+  const gopro = goproFor(a, 7.5);
+  const sync = syncRide(gopro, b, { nudgeMs: 0, imu: false });
+  const mac = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const t0 = b.clock.utc0;
+
+  // Everything with a recorded zone: the HUD clock uses it.
+  const tlRide = buildTimeline(gopro, b, sync, {});
+  const sRide = H.buildHudSpec(tlRide, {});
+  assert.strictEqual(sRide.clock.tz, 'Europe/Lisbon');
+  assert.strictEqual(sRide.clock.tzSource, 'ride');
+  assert.strictEqual(sRide.clock.tzOffsetMin, H.tzOffsetMin('Europe/Lisbon', t0));
+  assert.strictEqual(P.clockZone({ volt: b }, {}).label, 'Clock: Europe/Lisbon (from the ride)');
+
+  // An explicit zone wins: --tz on the timeline, or the style's zone at build time.
+  const tlCli = buildTimeline(gopro, b, sync, { tz: 'Asia/Kolkata' });
+  assert.deepStrictEqual([tlCli.tz, tlCli.tzSource], ['Asia/Kolkata', 'explicit']);
+  const sCli = H.buildHudSpec(tlCli, {});
+  assert.deepStrictEqual([sCli.clock.tz, sCli.clock.tzSource, sCli.clock.tzOffsetMin], ['Asia/Kolkata', 'explicit', 330]);
+  const sStyle = H.buildHudSpec(tlRide, { tz: 'America/New_York' });
+  assert.deepStrictEqual([sStyle.clock.tz, sStyle.clock.tzSource], ['America/New_York', 'explicit']);
+  assert.strictEqual(P.clockZone({ volt: b }, { tz: 'Asia/Kolkata' }).label, 'Clock: Asia/Kolkata (set by you)');
+
+  // An old export has no zone: this Mac's zone, as before.
+  const tlOld = buildTimeline(gopro, a, sync, {});
+  assert.deepStrictEqual([tlOld.tz, tlOld.tzSource], [null, null]);
+  const sOld = H.buildHudSpec(tlOld, {});
+  assert.deepStrictEqual([sOld.clock.tz, sOld.clock.tzSource], [mac, 'mac']);
+  assert.strictEqual(P.clockZone({ volt: a }, {}).label, 'Clock: ' + mac + " (this Mac's zone; the export has no time zone)");
+
+  // An unusable zone id is skipped; a timeline from before 0.1.2 (tz from --tz, no tzSource) still counts as explicit.
+  assert.deepStrictEqual(H.resolveClockZone([null], 'Not/AZone'), { tz: mac, source: 'mac' });
+  assert.deepStrictEqual(H.clockZoneOf({ tz: 'UTC' }), { tz: 'UTC', source: 'explicit' });
 });

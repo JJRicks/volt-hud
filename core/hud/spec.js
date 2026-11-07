@@ -24,6 +24,31 @@ function tzOffsetMin(tz, utcMs) {
   return -new Date(utcMs).getTimezoneOffset();
 }
 function localZone() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch (e) { return null; } }
+function validZone(tz) {
+  if (!tz || typeof tz !== 'string') return false;
+  try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; } catch (e) { return false; }
+}
+
+// The HUD clock's zone and where it came from. Precedence: an explicit zone (--tz, the style),
+// then the ride's recorded zone (Everything export, timeZone.recorded), then this Mac's zone.
+// An unknown zone id is skipped. source: 'explicit' | 'ride' | 'mac'.
+function resolveClockZone(explicit, ride) {
+  for (const z of [].concat(explicit)) if (validZone(z)) return { tz: z, source: 'explicit' };
+  if (validZone(ride)) return { tz: ride, source: 'ride' };
+  return { tz: localZone(), source: 'mac' };
+}
+// The zone a timeline + style resolve to (what buildHudSpec uses).
+function clockZoneOf(tl, style, opts) {
+  style = style || {}; opts = opts || {};
+  const tlExplicit = tl && tl.tz && tl.tzSource !== 'ride' ? tl.tz : null; // older timelines: tz came only from --tz
+  const ride = tl && tl.tz && tl.tzSource === 'ride' ? tl.tz : null;
+  return resolveClockZone([style.tz, opts.tz, tlExplicit], ride);
+}
+// One short line for the panel and the CLI.
+function clockZoneLabel(z) {
+  const from = z.source === 'explicit' ? 'set by you' : z.source === 'ride' ? 'from the ride' : "this Mac's zone; the export has no time zone";
+  return 'Clock: ' + (z.tz || 'this Mac') + ' (' + from + ')';
+}
 
 function chan(arr, rate, o) {
   o = o || {};
@@ -62,7 +87,8 @@ function buildHudSpec(tl, styleIn, opts) {
   const jrk = B.easeN(B.mapN(get('jerk'), (x) => Math.min(Math.max(x, 0), 6)), 0.3, rate);
   const utc = get('utcMs');
   const i0 = firstValid(utc);
-  const tz = style.tz || tl.tz || opts.tz || localZone();
+  const zone = clockZoneOf(tl, style, opts);
+  const tz = zone.tz;
   let clk = nul(), baseDayMs = 0, tzOff = 0;
   if (i0 >= 0) {
     tzOff = tzOffsetMin(tz, utc[i0]);
@@ -164,7 +190,7 @@ function buildHudSpec(tl, styleIn, opts) {
     vertical: { unit: style.vertUnit },
     gmeter: { unit: style.gUnit, pxPerG: 220, trailS: 1.5 },
     jerk: { max: 3 },
-    clock: { clock24: style.clock24, baseDayMs, tz, tzOffsetMin: tzOff },
+    clock: { clock24: style.clock24, baseDayMs, tz, tzSource: zone.source, tzOffsetMin: tzOff },
     stats: { distUnit: imperial ? 'mi' : 'km', speedUnit: imperial ? 'mph' : 'km/h', rideStart: Math.round(rideStart * 1000) / 1000, rideEnd: Math.round(rideEnd * 1000) / 1000 },
     coords: {},
     map: { path: mapPath },
@@ -185,8 +211,9 @@ function buildHudSpec(tl, styleIn, opts) {
     comp: { name: style.compName || 'Volt HUD ' + base, width: style.comp[0], height: style.comp[1], fps, frames, durationS: tl.video.durationS },
     style, colors: col, fonts: FONTS, plate: style.plate, safe: lay.safe,
     rateHz: rate, channels: C, widgets, warnings, keyCount: keys,
+    clock: { tz, tzSource: zone.source, tzOffsetMin: tzOff, label: clockZoneLabel(zone) },
     source: { files: tl.video.files, rideStartVideoS: ride.videoStartS, sync: tl.sync ? { confidence: tl.sync.confidence, nudge_ms: tl.sync.nudge_ms, method: tl.sync.method } : null },
   };
 }
 
-module.exports = { buildHudSpec, tzOffsetMin, FONTS, KMH_TO_MPH };
+module.exports = { buildHudSpec, tzOffsetMin, resolveClockZone, clockZoneOf, clockZoneLabel, FONTS, KMH_TO_MPH };

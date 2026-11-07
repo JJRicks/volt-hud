@@ -207,3 +207,5 @@ queue" adds at most 30 s with "High Quality with Alpha" (verified: ProRes 4444, 
   pipeline calls in Node (load, sync 11.277 s medium, +2-frame nudge, Focus 16:9 and Corner 9:16
   imperial specs), identical to the older files. Not yet run inside After Effects: AE was open in
   the owner's session, so the panel was not reinstalled for the automation-event check.
+- 0.1.2: the clock uses the ride's recorded zone (explicit `--tz`/style first, the Mac last); a
+  "Clock: …" line in the panel's Look section and in the CLI output.

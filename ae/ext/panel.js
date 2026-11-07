@@ -150,6 +150,7 @@
         state.outDir = path.join(os.homedir(), 'Documents', 'Volt HUD', state.base);
         $('outDir').textContent = 'Files go to ' + state.outDir.replace(os.homedir(), '~');
         $('pvStart').value = Math.max(0, Math.floor(state.sync.rideStartVideoS));
+        $('clockZone').textContent = P.clockZone(ride, readStyle(false)).label;
         showSync(); updateButtons();
         if (state.mp4) checkMp4();
         return { ok: true, loadMs: Date.now() - t0, sync: { rideStartVideoS: state.sync.rideStartVideoS, confidence: state.sync.confidence, decidedBy: state.sync.decidedBy } };
@@ -341,7 +342,7 @@
     var job, rep = { started: new Date().toISOString() };
     try { job = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data; } catch (e) { return; }
     if (!job || !job.outDir || !job.videos || !job.volt) return;
-    function finish() { rep.ui = { load: $('loadMsg').textContent, sync: $('syncSummary').textContent, match: $('match').textContent, mp4: $('mp4Msg').textContent, build: $('buildMsg').textContent, preview: $('pvMsg').textContent, font: $('fontMsg').textContent, nudgeFrames: $('nudgeFr').textContent };
+    function finish() { rep.ui = { load: $('loadMsg').textContent, sync: $('syncSummary').textContent, match: $('match').textContent, mp4: $('mp4Msg').textContent, build: $('buildMsg').textContent, preview: $('pvMsg').textContent, font: $('fontMsg').textContent, nudgeFrames: $('nudgeFr').textContent, clock: $('clockZone').textContent, version: $('ver').textContent };
       try { P.writePrivate(path.join(job.outDir, 'panel-run.json'), JSON.stringify(rep, null, 1)); } catch (e) {} }
     state.videos = P.expandVideos(job.videos); state.volt = job.volt; state.mp4 = job.mp4 || null;
     if (job.style) applyStyle(job.style);

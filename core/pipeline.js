@@ -9,7 +9,7 @@ const { loadVolt, sniffFormat, EVERYTHING_FORMAT } = require('./parse/volt');
 const { syncRide } = require('./sync/sync');
 const { syncStrip } = require('./sync/strip');
 const { buildTimeline } = require('./timeline');
-const { buildHudSpec } = require('./hud/spec');
+const { buildHudSpec, resolveClockZone, clockZoneLabel } = require('./hud/spec');
 
 // All chapters of the recording a picked file belongs to (GS01xxxx.360, GS02xxxx.360, ...).
 function findChapters(file) {
@@ -107,6 +107,13 @@ function makeTimeline(ride, sync, opts) {
   return buildTimeline(ride.gopro, ride.volt, sync, { rateHz: opts.rateHz || 10, coords: !!opts.coords, tz: opts.tz || null, style: opts.style });
 }
 
+// The clock zone for a loaded ride: {tz, source, label}; style.tz (explicit) wins over the ride's zone.
+function clockZone(ride, style) {
+  const z = resolveClockZone([style && style.tz], ride && ride.volt && ride.volt.timeZone);
+  z.label = clockZoneLabel(z);
+  return z;
+}
+
 function rideBase(ride) {
   return ride.volt.summary && ride.volt.summary.id ? 'ride-' + String(ride.volt.summary.id).slice(0, 8) : path.basename(ride.videos[0]).replace(/\.[^.]+$/, '');
 }
@@ -118,4 +125,4 @@ function writePrivate(file, text) {
   fs.chmodSync(file, 0o600);
 }
 
-module.exports = { findChapters, expandVideos, expandVolt, loadRide, runSync, applyNudge, makeTimeline, rideBase, writePrivate, buildHudSpec, describeVolt };
+module.exports = { findChapters, expandVideos, expandVolt, loadRide, runSync, applyNudge, makeTimeline, rideBase, writePrivate, buildHudSpec, describeVolt, clockZone };

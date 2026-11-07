@@ -94,7 +94,10 @@ function buildTimeline(gopro, volt, sync, opts) {
     version: 1,
     video: { files: gopro.chapters.map((c) => c.file), chapters: gopro.chapters.map((c) => ({ file: c.file, startS: c.offsetS, durationS: c.durationS })), fps: gopro.fps, durationS: dur, device: gopro.device, startUtc: volt.clock && sync ? new Date(Math.round(monoToUtc(volt.clock, videoToMono(model, 0)))).toISOString() : null },
     sync: syncForTimeline(sync),
-    tz: opts.tz || null,
+    // The clock zone: explicit (--tz) first, then the ride's recorded zone (Everything export).
+    // null = none known here; the HUD spec then uses this Mac's zone.
+    tz: opts.tz || volt.timeZone || null,
+    tzSource: opts.tz ? 'explicit' : volt.timeZone ? 'ride' : null,
     rateHz: rate,
     samples: n,
     nullMeans: 'no data at this sample: draw the grey "[no data]" state',

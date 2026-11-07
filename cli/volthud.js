@@ -75,6 +75,7 @@ async function sync(a) {
   if (s.peak) line('peak / 2nd', s.peak.value.toFixed(3) + ' / ' + (s.peak.secondBest ? s.peak.secondBest.peak.toFixed(3) + ' at ' + s.peak.secondBest.deltaS.toFixed(2) + ' s' : '-') + ', PSR ' + s.peak.psr.toFixed(1));
   if (s.imu && s.imu.fit) line('imu residual', s.imu.fit.residualMs.toFixed(1) + ' ms over ' + s.imu.fit.windowsUsed + ' windows');
   s.notes.forEach((n) => line('note', n));
+  line('clock zone', core.hud.clockZoneLabel(core.hud.clockZoneOf(tl)).replace(/^Clock: /, ''));
   line('wrote', tlPath + ' (+ .sync.json, .sync.html)');
 }
 
