@@ -265,7 +265,7 @@ var VoltHUD = (function () {
     var grd = 'var gok = ' + OK('grd') + '; var g = ' + V('grd') + '; ';
     var sign = 'function sg(x){return (x > 0 ? "+" : "") + x;} ';
     var main = text(nl, 'Vertical value', '0', 'semibold', 40, C.text, 'l', [92, 50]);
-    var sub = text(nl, 'Vertical unit', '', 'regular', 22, C.muted, 'l', [92, 80]);
+    var sub = text(nl, 'Vertical unit', '', 'regular', 22, C.label, 'l', [92, 80]);
     if (p.unit === 'grade') {
       ex(source(main), sign + grd + 'gok ? sg(Math.round(g)) + " %" : (' + ok + ' ? "level" : ' + DASH + ');');
       ex(source(sub), grd + 'var ok = ' + ok + '; ok ? "grade" + (gok ? "" : " (slow)") : ' + NODATA + ';');
@@ -275,7 +275,7 @@ var VoltHUD = (function () {
       ex(source(sub), grd + 'var ok = ' + ok + '; ok ? ' + q(p.unit) + ' + (gok ? " \\u00b7 " + Math.round(g) + " %" : "") : ' + NODATA + ';');
       fillFx(main, ok + ' ? ' + arr(C.text) + ' : ' + arr(C.dim) + ';');
     }
-    fillFx(sub, ok + ' ? ' + arr(C.muted) + ' : ' + arr(C.dim) + ';');
+    fillFx(sub, ok + ' ? ' + arr(C.label) + ' : ' + arr(C.dim) + ';');
   }
 
   function wGmeter(w) {
@@ -327,10 +327,10 @@ var VoltHUD = (function () {
     var body = p.clock24 ? 'z(h) + ":" + z(m) + ":" + z(sec)' : '((h % 12) || 12) + ":" + z(m) + ":" + z(sec) + (h < 12 ? " AM" : " PM")';
     ex(source(tm), pre + 'ok ? ' + body + ' : ' + DASH + ';');
     fillFx(tm, OK('clk') + ' ? ' + arr(C.text) + ' : ' + arr(C.dim) + ';');
-    var dt = text(nl, 'Clock date', '', 'regular', 26, C.muted, 'r', [300, 98]);
+    var dt = text(nl, 'Clock date', '', 'regular', 26, C.label, 'r', [300, 98]);
     var dfmt = p.clock24 ? 'W[D.getUTCDay()] + " " + D.getUTCDate() + " " + M[D.getUTCMonth()] + " " + D.getUTCFullYear()' : 'W[D.getUTCDay()] + " " + M[D.getUTCMonth()] + " " + D.getUTCDate() + " " + D.getUTCFullYear()';
     ex(source(dt), pre + 'var W = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"], M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; var D = new Date(' + p.baseDayMs + ' + day * 86400000); ok ? ' + dfmt + ' : ' + NODATA + ';');
-    fillFx(dt, OK('clk') + ' ? ' + arr(C.muted) + ' : ' + arr(C.dim) + ';');
+    fillFx(dt, OK('clk') + ' ? ' + arr(C.label) + ' : ' + arr(C.dim) + ';');
     fitPlate(cpl, ['Clock time', 'Clock date'], 'r', 316, 112, 200, 16);
   }
 
@@ -342,16 +342,15 @@ var VoltHUD = (function () {
     ex(source(t), dur + 'var ok = ' + OK('trip') + '; var el = clamp(time - ' + p.rideStart + ', 0, ' + (p.rideEnd - p.rideStart) + '); ' +
       'ok ? "Trip " + ' + V('trip') + '.toFixed(1) + " ' + p.distUnit + ' \\u00b7 " + hms(el) + " \\u00b7 max " + Math.round(' + V('vmax') + ') + " ' + p.speedUnit + '" : "Trip ' + NODATA.slice(1, -1) + '";');
     fillFx(t, OK('trip') + ' ? ' + arr(C.text) + ' : ' + arr(C.dim) + ';');
-    t.property('ADBE Transform Group').property('ADBE Opacity').setValue(90);
     fitPlate(pl, [t.name], w.align, 640, 48, 120, 20);
   }
 
   function wCoords(w) {
     var nl = widgetNull(w, 'Coordinates');
     var pl = plate(nl, 'Coords plate', [520, 48], [260, 24], 16);
-    var t = text(nl, 'Coords text', '', 'regular', 26, C.muted, w.align, [alignX(w.align, 520, 20), 33]);
+    var t = text(nl, 'Coords text', '', 'regular', 26, C.label, w.align, [alignX(w.align, 520, 20), 33]);
     ex(source(t), 'var ok = ' + OK('lat') + '; var a = ' + V('lat') + ', b = ' + V('lon') + '; ok ? Math.abs(a).toFixed(5) + "\\u00b0 " + (a >= 0 ? "N" : "S") + "   " + Math.abs(b).toFixed(5) + "\\u00b0 " + (b >= 0 ? "E" : "W") : ' + NODATA + ';');
-    fillFx(t, OK('lat') + ' ? ' + arr(C.muted) + ' : ' + arr(C.dim) + ';');
+    fillFx(t, OK('lat') + ' ? ' + arr(C.label) + ' : ' + arr(C.dim) + ';');
     fitPlate(pl, [t.name], w.align, 520, 48, 120, 20);
   }
 
@@ -371,19 +370,25 @@ var VoltHUD = (function () {
     if (!p.path) { var t = text(nl, 'Map no data', '[no data]', 'regular', 24, C.dim, 'c', [150, 158]); void t; }
   }
 
-  // Soft dark shadow under every text layer, so muted labels stay legible over bright video.
+  // Text legibility over bright video: a tight dark halo around the glyphs (0 distance, like a soft
+  // outline; the ADBE Fill effect recolours everything, so a real text stroke can't stay dark), plus a
+  // soft offset shadow. Sizes are in layer space and scale with the widget null.
+  function addShadow(par, op, dist, soft) {
+    par.addProperty('ADBE Drop Shadow');
+    var d = par.property(par.numProperties);
+    d.property('ADBE Drop Shadow-0001').setValue([0, 0, 0]);
+    var o = d.property('ADBE Drop Shadow-0002');
+    o.setValue(o.hasMax ? o.maxValue * op : 255 * op);
+    d.property('ADBE Drop Shadow-0004').setValue(dist);
+    d.property('ADBE Drop Shadow-0005').setValue(soft);
+  }
   function shadows() {
     for (var i = 1; i <= comp.numLayers; i++) {
       var l = comp.layer(i);
       if (!(l instanceof TextLayer)) continue;
       var par = l.property('ADBE Effect Parade');
-      par.addProperty('ADBE Drop Shadow');
-      var d = par.property(par.numProperties);
-      d.property('ADBE Drop Shadow-0001').setValue([0, 0, 0]);
-      var op = d.property('ADBE Drop Shadow-0002');
-      op.setValue(op.hasMax ? op.maxValue * 0.7 : 180);
-      d.property('ADBE Drop Shadow-0004').setValue(2);
-      d.property('ADBE Drop Shadow-0005').setValue(8);
+      addShadow(par, 0.95, 0, 5); // halo
+      addShadow(par, 0.75, 2, 9); // soft shadow
     }
   }
 

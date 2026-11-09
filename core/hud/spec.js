@@ -213,8 +213,12 @@ function buildHudSpec(tl, styleIn, opts) {
   for (const k in TOKENS) col[k] = hexToRgb(TOKENS[k]);
   const ramp = accentRamp(style.accent);
   col.accent = ramp.accent; col.accentDeep = ramp.deep; col.accentHi = ramp.hi;
-  // labels drawn straight over video (not on a plate) sit between muted and text, for contrast
-  col.label = col.muted.map((x, i) => Math.round((x + (col.text[i] - x) * 0.45) * 1000) / 1000);
+  // Small labels and units are drawn straight over video or over a translucent plate: near-text
+  // brightness so they stay readable over bright frames (owner, Nov 8), and the "[no data]" grey is
+  // lifted a little for the same reason (it still reads as greyed out).
+  const mixRound = (a, b, k) => a.map((x, i) => Math.round((x + (b[i] - x) * k) * 1000) / 1000);
+  col.label = mixRound(col.muted, col.text, 0.8);
+  col.dim = mixRound(col.dim, col.text, 0.35);
 
   const base = (tl.video.files && tl.video.files[0] ? String(tl.video.files[0]).replace(/\.[^.]+$/, '') : 'ride');
   let keys = 0; for (const k in C) keys += C[k].keys.t.length + (C[k].ok ? C[k].ok.t.length : 0);
