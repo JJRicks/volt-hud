@@ -3,9 +3,11 @@
 // volthud CLI. Commands:
 //   volthud probe <360...>                         streams, rates, GPS time/fix (JSON)
 //   volthud check-mp4 <360> <mp4>                  t=0 check by audio cross-correlation (needs ffmpeg)
-//   volthud sync <360...> --volt <everything.json|dir|files> --out <dir> [--nudge-ms N] [--anchor-video-s T] [--rate 10] [--coords] [--no-imu]
+//   volthud sync <360...> --volt <everything.json|dir|files> --out <dir> [--nudge-ms N] [--anchor-video-s T | --anchor-start-video-s T] [--rate 10] [--coords] [--no-imu]
 //     --anchor-video-s T: "I start rolling at video time T" (s): the Volt data's first sustained motion
 //     (3 km/h for 3 s) is put at T, then fine-tuned within +-5 s. For when the auto-sync is unsure.
+//     --anchor-start-video-s T: "I tap Record in Volt at video time T" (s): Volt's recording START is
+//     put at T, then fine-tuned within +-2 s.
 // Output files are written with mode 600 into a mode-700 directory (ride data is private).
 
 const fs = require('fs');
@@ -20,6 +22,7 @@ function parseArgs(argv) {
     else if (x === '--out') a.out = argv[++i];
     else if (x === '--nudge-ms') a.nudgeMs = Number(argv[++i]);
     else if (x === '--anchor-video-s') a.anchorVideoS = Number(argv[++i]);
+    else if (x === '--anchor-start-video-s') a.anchorStartVideoS = Number(argv[++i]);
     else if (x === '--rate') a.rate = Number(argv[++i]);
     else if (x === '--coords') a.coords = true;
     else if (x === '--no-imu') a.noImu = true;
@@ -31,7 +34,7 @@ function parseArgs(argv) {
   return a;
 }
 
-const USAGE = 'usage:\n  volthud probe <360...>\n  volthud check-mp4 <360> <mp4> [--video]\n  volthud sync <360...> --volt <everything.json|dir|files> --out <dir> [--nudge-ms N] [--anchor-video-s T] [--rate 10] [--coords] [--no-imu] [--tz Area/City]\n';
+const USAGE = 'usage:\n  volthud probe <360...>\n  volthud check-mp4 <360> <mp4> [--video]\n  volthud sync <360...> --volt <everything.json|dir|files> --out <dir> [--nudge-ms N] [--anchor-video-s T | --anchor-start-video-s T] [--rate 10] [--coords] [--no-imu] [--tz Area/City]\n';
 
 function writePrivate(file, text) {
   fs.writeFileSync(file, text, { mode: 0o600 });
@@ -62,7 +65,9 @@ async function sync(a) {
     try { nudgeMs = JSON.parse(fs.readFileSync(tlPath, 'utf8')).sync.nudge_ms || 0; } catch (e) { nudgeMs = 0; }
   }
   if (a.anchorVideoS != null && !Number.isFinite(a.anchorVideoS)) { process.stderr.write('--anchor-video-s needs a number of seconds\n'); process.exit(2); }
-  const s = core.sync.syncRide(gopro, volt, { nudgeMs: nudgeMs || 0, imu: !a.noImu, anchorVideoS: a.anchorVideoS });
+  if (a.anchorStartVideoS != null && !Number.isFinite(a.anchorStartVideoS)) { process.stderr.write('--anchor-start-video-s needs a number of seconds\n'); process.exit(2); }
+  if (a.anchorStartVideoS != null && a.anchorVideoS != null) { process.stderr.write('use either --anchor-video-s or --anchor-start-video-s, not both\n'); process.exit(2); }
+  const s = core.sync.syncRide(gopro, volt, { nudgeMs: nudgeMs || 0, imu: !a.noImu, anchorVideoS: a.anchorVideoS, anchorStartVideoS: a.anchorStartVideoS });
   const tl = core.timeline.buildTimeline(gopro, volt, s, { rateHz: a.rate || 10, coords: !!a.coords, tz: a.tz });
   writePrivate(tlPath, JSON.stringify(tl));
   const syncOut = Object.assign({}, s);
@@ -74,7 +79,8 @@ async function sync(a) {
   line('sync', s.summary);
   line('ride start in video', s.rideStartVideoS.toFixed(3) + ' s');
   line('agreed', s.agreed.join(', ') || '-');
-  if (s.anchor) line('anchor', 'rolling at ' + s.anchor.videoS.toFixed(3) + ' s' + (s.anchor.firstMotionRideS != null ? ' = ' + s.anchor.firstMotionRideS.toFixed(1) + ' s after Volt START' : ''));
+  if (s.anchor && s.anchor.kind === 'start') line('anchor', 'tapped Record at ' + s.anchor.videoS.toFixed(3) + ' s (Volt START)');
+  else if (s.anchor) line('anchor', 'rolling at ' + s.anchor.videoS.toFixed(3) + ' s' + (s.anchor.firstMotionRideS != null ? ' = ' + s.anchor.firstMotionRideS.toFixed(1) + ' s after Volt START' : ''));
   line(s.mode === 'gnss' ? 'coarse (GPS time)' : 'coarse (' + s.mode + ')', s.coarse.rideStartVideoS.toFixed(3) + ' s');
   if (s.search && s.search.best) line('search', 'best ' + s.search.best.startS.toFixed(1) + ' s' + (s.search.second ? ', next ' + s.search.second.startS.toFixed(1) + ' s (' + Math.round(s.search.ratio * 100) + ' %)' : ''));
   line('correction', s.correctionFromCoarseMs + ' ms');

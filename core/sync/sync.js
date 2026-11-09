@@ -282,9 +282,11 @@ function listWords(keys) {
   return w.length <= 1 ? w.join('') : w.slice(0, -1).join(', ') + ' and ' + w[w.length - 1];
 }
 
-// Main entry. opts: {nudgeMs, speedSearchS, imuSearchS, imu: bool, anchorVideoS}
+// Main entry. opts: {nudgeMs, speedSearchS, imuSearchS, imu: bool, anchorVideoS, anchorStartVideoS}
 // anchorVideoS: "I start rolling at this video time": the Volt data's first sustained motion is put
 // there, then fine-tuned within +-5 s.
+// anchorStartVideoS: "I tap Record in Volt at this video time": Volt's recording START is put there,
+// then fine-tuned within +-2 s (the tap is visible, so the mark is close). It wins if both are given.
 function syncRide(gopro, volt, opts) {
   opts = opts || {};
   const notes = [];
@@ -293,15 +295,24 @@ function syncRide(gopro, volt, opts) {
   let model, method, mode;
   let search = null, anchor = null;
   const stats = {};
-  const anchorS = opts.anchorVideoS == null || opts.anchorVideoS === '' ? NaN : Number(opts.anchorVideoS);
-  if (Number.isFinite(anchorS)) {
+  const numOrNaN = (x) => (x == null || x === '' ? NaN : Number(x));
+  const startMarkS = numOrNaN(opts.anchorStartVideoS);
+  const anchorS = numOrNaN(opts.anchorVideoS);
+  const kind = Number.isFinite(startMarkS) ? 'start' : Number.isFinite(anchorS) ? 'rolling' : null;
+  const anchorWin = opts.anchorSearchS || (kind === 'start' ? 2 : 5);
+  const markName = kind === 'start' ? 'your Record mark' : 'your start mark';
+  if (kind) {
     mode = 'anchor';
-    const fm = Q.firstMotion(volt);
-    const lead = fm ? (fm.mono - monoRef) / 1000 : 0;
-    const start0 = anchorS - lead;
-    anchor = { videoS: anchorS, firstMotionMono: fm ? fm.mono : null, firstMotionRideS: fm ? lead : null, source: fm ? fm.source : null, thresholdKmh: fm ? fm.thresholdKmh : null, startS: start0 };
-    if (!fm) notes.push('No sustained motion found in the Volt data: your mark is used as the ride start.');
-    const win = opts.anchorSearchS || 5;
+    let fm = null, lead = 0;
+    const markS = kind === 'start' ? startMarkS : anchorS;
+    if (kind === 'rolling') {
+      fm = Q.firstMotion(volt);
+      lead = fm ? (fm.mono - monoRef) / 1000 : 0;
+      if (!fm) notes.push('No sustained motion found in the Volt data: your mark is used as the ride start.');
+    }
+    const start0 = markS - lead;
+    anchor = { kind, videoS: markS, firstMotionMono: fm ? fm.mono : null, firstMotionRideS: fm ? lead : null, source: fm ? fm.source : null, thresholdKmh: fm ? fm.thresholdKmh : null, startS: start0 };
+    const win = anchorWin;
     search = Q.searchStart(gopro, volt, monoRef, { lo: start0 - win, hi: start0 + win, skip: opts.searchSkip });
     model = makeModel(monoRef, search.ok ? search.best.startS : start0, 1);
     method = search.ok ? 'anchor+search' : 'anchor';
@@ -469,8 +480,8 @@ function syncRide(gopro, volt, opts) {
       const edge = search && search.ok && search.atWindowEdge;
       if (bumpsOk && imuHigh && !edge && votes.length >= 3) confidence = 'high';
       else if (bumpsOk && !edge) confidence = 'medium';
-      if (!bumpsOk || edge) notes.push('The bumps do not confirm your start mark within ' + (opts.anchorSearchS || 5) + ' s: check it and nudge if needed.');
-      if (search && search.ok && search.outside && search.outside.score > 1.25 * search.best.score) notes.push('The automatic search prefers ' + search.outside.startS.toFixed(1) + ' s for the ride start (Volt START), ' + Math.abs(search.outside.startS - anchor.startS).toFixed(0) + ' s ' + (search.outside.startS > anchor.startS ? 'later' : 'earlier') + ' than your mark puts it.');
+      if (!bumpsOk || edge) notes.push('The bumps do not confirm ' + markName + ' within ' + anchorWin + ' s: check it and nudge if needed.');
+      if (search && search.ok && search.outside && search.outside.score > 1.25 * search.best.score) notes.push('The automatic search prefers ' + search.outside.startS.toFixed(1) + ' s for the ride start (Volt START), ' + Math.abs(search.outside.startS - anchor.startS).toFixed(0) + ' s ' + (search.outside.startS > anchor.startS ? 'later' : 'earlier') + ' than ' + markName + ' puts it.');
       score = (bumpsOk ? 0.6 : 0.15) + (imuHigh ? 0.3 : 0) + (edge ? -0.1 : 0);
     }
     for (const k of votes) if (agreed.indexOf(k) < 0) agreed.push(k);
@@ -493,7 +504,7 @@ function syncRide(gopro, volt, opts) {
   let summary;
   const ag = agreed.filter((k) => k !== 'gnss' && k !== 'anchor' && k !== 'clock');
   if (mode === 'gnss') summary = 'Synced from the GoPro’s GPS time' + (ag.length ? ', fine-tuned on ' + listWords(ag) : '') + '.';
-  else if (mode === 'anchor') summary = confidence === 'low' ? 'Using your start mark as you set it; the bumps could not confirm it. Check it and nudge if needed.' : 'Synced from your start mark, fine-tuned on ' + listWords(ag.length ? ag : ['bumps']) + '.';
+  else if (mode === 'anchor') summary = confidence === 'low' ? 'Using ' + markName + ' as you set it; the bumps could not confirm it. Check it and nudge if needed.' : 'Synced from ' + markName + ', fine-tuned on ' + listWords(ag.length ? ag : ['bumps']) + '.';
   else if (mode === 'search') summary = confidence === 'low' ? 'Best guess only' + why + ': check it and nudge, or mark when you start rolling.' : 'Synced from ' + listWords(ag) + why + '.';
   else if (mode === 'clock') summary = 'Rough guess from the camera clock' + why + ': check it and nudge, or mark when you start rolling.';
   else summary = 'Could not sync: mark when you start rolling, or nudge by hand.';

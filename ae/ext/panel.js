@@ -204,26 +204,32 @@
   $('nudgeMs').onchange = function () { var v = parseFloat($('nudgeMs').value); setNudge(Number.isFinite(v) ? v : 0); };
   $('nudgeReset').onclick = function () { setNudge(0); };
 
-  // ---------- manual anchor: "I start rolling at the playhead" ----------
-  // Re-runs the sync with the Volt data's first sustained motion put at a video time (fine-tuned within 5 s).
-  function resync(anchorS) {
-    var r = P.runSync(state.ride, { nudgeMs: 0, anchorVideoS: anchorS });
-    state.sync = r.sync; state.strip = r.strip; state.nudgeMs = 0; state.compId = null; state.anchorS = anchorS;
+  // ---------- manual anchors: "Data starts here (I tap Record)" and "I start rolling here" ----------
+  // Re-runs the sync with Volt's recording START (kind 'start', fine-tuned within 2 s) or the Volt
+  // data's first sustained motion (kind 'rolling', within 5 s) put at a video time.
+  function resync(anchorS, kind) {
+    var o = { nudgeMs: 0 };
+    if (anchorS != null) o[kind === 'start' ? 'anchorStartVideoS' : 'anchorVideoS'] = anchorS;
+    var r = P.runSync(state.ride, o);
+    state.sync = r.sync; state.strip = r.strip; state.nudgeMs = 0; state.compId = null; state.anchorS = anchorS; state.anchorKind = anchorS != null ? (kind || 'rolling') : null;
     $('nudgeMs').value = 0; $('anchorClear').disabled = anchorS == null;
     showSync(); updateButtons();
   }
-  $('anchorBtn').onclick = function () {
+  function markFromPlayhead(kind) {
     if (!state.ride) { msg('anchorMsg', 'Load and sync first.', 'warn'); return; }
     var names = state.videos.map(function (f) { return path.basename(f); });
     if (state.mp4) names.push(path.basename(state.mp4));
     msg('anchorMsg', 'Reading the playhead…');
-    evalJsx('VoltHUD.playhead(' + JSON.stringify(JSON.stringify(names)) + ')', function (r) {
+    evalJsx('VoltHUD.playhead(' + JSON.stringify(JSON.stringify(names)) + ', ' + JSON.stringify(kind) + ')', function (r) {
       if (!r.ok) { msg('anchorMsg', r.error || 'Could not read the playhead.', 'bad'); return; }
-      try { resync(r.videoS); } catch (e) { msg('anchorMsg', 'Could not sync from the mark: ' + e.message, 'bad'); return; }
+      try { resync(r.videoS, kind); } catch (e) { msg('anchorMsg', 'Could not sync from the mark: ' + e.message, 'bad'); return; }
       var where = r.layer ? 'on “' + r.layer + '”' : r.hud ? 'in the Volt HUD comp' : 'comp time (no layer of this GoPro video in “' + r.comp + '”)';
-      msg('anchorMsg', 'Rolling at ' + mmss(r.videoS) + ' · ' + where, r.guess ? 'warn' : state.sync.confidence === 'low' ? 'warn' : 'ok');
+      var label = kind === 'start' ? 'Record tapped at ' : 'Rolling at ';
+      msg('anchorMsg', label + mmss(r.videoS) + ' · ' + where, r.guess ? 'warn' : state.sync.confidence === 'low' ? 'warn' : 'ok');
     });
-  };
+  }
+  $('anchorStartBtn').onclick = function () { markFromPlayhead('start'); };
+  $('anchorBtn').onclick = function () { markFromPlayhead('rolling'); };
   $('anchorClear').onclick = function () { resync(null); msg('anchorMsg', ''); };
 
   function showSync() {
@@ -361,7 +367,7 @@
 
   // ---------- automation (tests) ----------
   // ExtendScript can drive the panel the way a user would: dispatch a CSXSEvent of type
-  // com.jjricks.volthud.run with JSON {videos, volt, mp4?, anchorVideoS?, nudgeMs?, style?, outDir, preview?: {startS, durS}}.
+  // com.jjricks.volthud.run with JSON {videos, volt, mp4?, anchorVideoS?, anchorStartVideoS?, nudgeMs?, style?, outDir, preview?: {startS, durS}}.
   // The panel loads, syncs, builds and writes a JSON report to <outDir>/panel-run.json (600).
   function automate(ev) {
     var job, rep = { started: new Date().toISOString() };
@@ -376,7 +382,8 @@
       if (!r.ok) throw new Error(r.error);
       state.outDir = job.outDir;
       $('outDir').textContent = 'Files go to ' + state.outDir;
-      if (job.anchorVideoS != null) resync(job.anchorVideoS);
+      if (job.anchorStartVideoS != null) resync(job.anchorStartVideoS, 'start');
+      else if (job.anchorVideoS != null) resync(job.anchorVideoS, 'rolling');
       if (job.nudgeMs) setNudge(job.nudgeMs);
       return doBuild();
     }).then(function (r) {

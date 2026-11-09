@@ -6,7 +6,7 @@
 //
 //   VoltHUD.build(specPath)                 -> JSON string {ok, comp, ...} or {ok:false, error}
 //   VoltHUD.addPreview(compId, startS, durS, outPath) -> JSON string (ProRes 4444 + alpha RQ item)
-//   VoltHUD.playhead(namesJson)             -> JSON string {ok, videoS, comp, layer?} (manual sync anchor)
+//   VoltHUD.playhead(namesJson, what?)      -> JSON string {ok, videoS, comp, layer?} (manual sync anchors)
 //   VoltHUD.ping()                          -> JSON string {ok, ae}
 var VoltHUD = (function () {
   var DATA = 'VOLT DATA';
@@ -494,12 +494,13 @@ var VoltHUD = (function () {
 
   // The active comp's playhead as a time in the GoPro video: (comp time - layer start) / stretch on a
   // layer whose file is one of `namesJson` (the .360 chapters or the reframed MP4); in the Volt HUD comp
-  // (t=0 = first frame) the comp time; otherwise the comp time, flagged as a guess.
-  function playhead(namesJson) {
+  // (t=0 = first frame) the comp time; otherwise the comp time, flagged as a guess. `what` (optional)
+  // words the error for the button pressed: 'start' = tapping Record in Volt, else start of rolling.
+  function playhead(namesJson, what) {
     var R = { ok: false };
     try {
       var c = app.project ? app.project.activeItem : null;
-      if (!c || !(c instanceof CompItem)) throw new Error('Open the comp with your GoPro video and put the playhead where you start rolling.');
+      if (!c || !(c instanceof CompItem)) throw new Error('Open the comp with your GoPro video and put the playhead ' + (what === 'start' ? 'on the moment you tap Record in Volt.' : 'where you start rolling.'));
       var names = eval('(' + namesJson + ')'), hit = null, i, k;
       R.comp = c.name; R.compTimeS = c.time;
       for (i = 1; i <= c.numLayers && !hit; i++) {

@@ -209,6 +209,26 @@ test('anchor: "I start rolling at t" is fine-tuned within 5 s; a far-off mark st
   assert.ok(far.notes.some((n) => /automatic search prefers/.test(n)), far.notes.join(' / '));
 });
 
+test('Record mark: "I tap Record at t" puts Volt START at t, fine-tuned within 2 s; a far-off mark stays as set, low', () => {
+  for (const d of [1.2, -0.8]) {
+    const s = Y.syncRide(LONG.gopro, LONG.volt, { anchorStartVideoS: -200 + d });
+    assert.strictEqual(s.mode, 'anchor');
+    assert.strictEqual(s.anchor.kind, 'start');
+    assert.ok(Math.abs(s.rideStartVideoS - -200) < 0.05, 'mark ' + d + ': start ' + s.rideStartVideoS);
+    assert.notStrictEqual(s.confidence, 'low');
+    assert.ok(/your Record mark/.test(s.summary), s.summary);
+  }
+  const far = Y.syncRide(LONG.gopro, LONG.volt, { anchorStartVideoS: -200 + 15 });
+  assert.strictEqual(far.confidence, 'low');
+  assert.strictEqual(far.method, 'anchor');
+  assert.ok(Math.abs(far.rideStartVideoS - (-200 + 15)) < 1e-6); // kept exactly where the owner put it
+  assert.ok(far.notes.some((n) => /automatic search prefers/.test(n)), far.notes.join(' / '));
+  assert.ok(far.notes.some((n) => /your Record mark/.test(n)), far.notes.join(' / '));
+  // the two anchors are different things: the rolling mark places first motion, the Record mark START
+  const both = Y.syncRide(LONG.gopro, LONG.volt, { anchorVideoS: 0, anchorStartVideoS: -200 });
+  assert.strictEqual(both.anchor.kind, 'start');
+});
+
 test('with GoPro GPS time the summary names it', () => {
   const s = Y.syncRide(R.gopro, R.volt, {});
   assert.strictEqual(s.mode, 'gnss');
