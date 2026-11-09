@@ -119,6 +119,9 @@ function toArrays(samples, nAxes) {
   return { t, ax };
 }
 
+// A camera that never got a GPS lock can write empty samples among its 0,0 rows.
+function gpsSamples(samples) { return samples.filter((s) => Array.isArray(s.value)); }
+
 function concatF64(parts) {
   const n = parts.reduce((a, p) => a + p.length, 0);
   const out = new Float64Array(n);
@@ -154,13 +157,14 @@ async function loadGoPro(paths, opts) {
 
     const shift = (a) => { for (let i = 0; i < a.length; i++) a[i] += offsetS; return a; };
     const g = st.GPS9 || st.GPS5;
-    if (g) {
+    const gs = g ? gpsSamples(g.samples) : [];
+    if (gs.length) {
       gpsSrc = gpsSrc || (st.GPS9 ? 'GPS9' : 'GPS5');
       const isG9 = !!st.GPS9;
-      const n = g.samples.length;
+      const n = gs.length;
       const t = new Float64Array(n), lat = new Float64Array(n), lon = new Float64Array(n), alt = new Float64Array(n), s2 = new Float64Array(n), s3 = new Float64Array(n), fix = new Float64Array(n), dop = new Float64Array(n);
       for (let i = 0; i < n; i++) {
-        const s = g.samples[i], v = s.value;
+        const s = gs[i], v = s.value;
         t[i] = s.cts / 1000 + offsetS; lat[i] = v[0]; lon[i] = v[1]; alt[i] = v[2]; s2[i] = v[3]; s3[i] = v[4];
         if (isG9) { dop[i] = v[7]; fix[i] = v[8]; } else { fix[i] = s.fix != null ? s.fix : NaN; dop[i] = s.precision != null ? s.precision / 100 : NaN; }
       }
@@ -233,4 +237,4 @@ function summariseGpsMeta(meta) {
   return { timeSamples: n, utcStart: Number.isFinite(utc0) ? new Date(utc0).toISOString() : null, utcEnd: Number.isFinite(utc1) ? new Date(utc1).toISOString() : null, fixHistogram: fix, goodFixSamples: dopGood };
 }
 
-module.exports = { loadGoPro, sortChapters, chapterKey, scanGpsMeta, gpsuToMs, klv };
+module.exports = { loadGoPro, sortChapters, chapterKey, scanGpsMeta, gpsuToMs, klv, gpsSamples };

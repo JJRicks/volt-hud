@@ -161,4 +161,9 @@ function reportText(r) {
   return lines.join('\n');
 }
 
-module.exports = { outputFor, scanFolder, overlapSeconds, choosePairs, timeOrder, planFolder, assemblyStem, reportText, firstUtcMs, MIN_OVERLAP_S };
+// Why a folder gave no usable recording. A .360 that failed to load must not be reported as a missing MP4.
+function noRecordingsReason(skipped) {
+  return (skipped || []).some((s) => /^could not read/.test(s.reason)) ? 'no recording in this folder could be read' : 'no recording in this folder has an MP4';
+}
+
+module.exports = { noRecordingsReason, outputFor, scanFolder, overlapSeconds, choosePairs, timeOrder, planFolder, assemblyStem, reportText, firstUtcMs, MIN_OVERLAP_S };

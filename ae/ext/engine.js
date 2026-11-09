@@ -64,7 +64,7 @@
       report.notes = plan.problems.slice();
       plan.recordings.forEach(function (r) { report.notes = report.notes.concat(r.notes); });
       if (out.upscaled) report.notes.push('4K 9:16: GoPro Reframe has no 2160x3840 size, so the video is Social 9:16 scaled to 200%.');
-      if (!plan.recordings.length) { finish('no recording in this folder has an MP4'); return; }
+      if (!plan.recordings.length) { finish(A.noRecordingsReason(plan.skipped)); return; }
 
       var begin = await evalAe('VoltAssembleAE.begin()');
       if (!begin.ok) { finish(begin.error); return; }

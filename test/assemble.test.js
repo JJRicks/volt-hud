@@ -102,3 +102,17 @@ test('report lists every recording, low confidence, and skips', () => {
   assert.match(t, /GS2: on V1, no HUD/);
   assert.match(t, /Skipped GS3/);
 });
+
+test('a .360 that cannot be read is not reported as a missing MP4', () => {
+  const A = require('../core/assemble');
+  assert.strictEqual(A.noRecordingsReason([{ name: 'GS011307', reason: 'could not read the .360 (bad file)' }]), 'no recording in this folder could be read');
+  assert.strictEqual(A.noRecordingsReason([{ name: 'GS011307', reason: 'no MP4 for GS011307.360' }]), 'no recording in this folder has an MP4');
+  assert.strictEqual(A.noRecordingsReason([]), 'no recording in this folder has an MP4');
+});
+
+test('empty GPS samples from a camera with no lock are left out', () => {
+  const { gpsSamples } = require('../core/parse/gopro');
+  const a = { value: [0, 0, 0, 0, 0], cts: 0 }, none = { value: null, cts: 50 }, b = { value: [1, 2, 3, 4, 5], cts: 100 };
+  assert.deepStrictEqual(gpsSamples([a, none, b]), [a, b]);
+  assert.deepStrictEqual(gpsSamples([none]), []);
+});
