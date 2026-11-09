@@ -55,7 +55,7 @@ function chan(arr, rate, o) {
   const valid = arr.some(B.isNum);
   const out = { hold: !!o.hold, ok: B.okKeys(arr, rate), valid };
   if (!valid) { out.keys = { t: [0], v: [0] }; out.ok = { t: [0], v: [0] }; return out; }
-  out.keys = o.hold ? B.steps(arr, rate, o.digits) : B.roundKeys(B.decimate(arr, rate, o.tol, o.maxSeg), o.digits == null ? 3 : o.digits);
+  out.keys = o.hold ? B.steps(arr, rate, o.digits) : B.roundKeys(B.decimate(arr, rate, o.tol, o.maxSeg, o.zeroPins), o.digits == null ? 3 : o.digits);
   return out;
 }
 
@@ -85,8 +85,11 @@ function buildHudSpec(tl, styleIn, opts) {
   const get = (k) => (Array.isArray(ch[k]) && ch[k].length === n ? ch[k] : nul());
 
   // ---- channels (display units where the expression only formats) ----
-  const speedDisp = B.mapN(get('speedKmh'), (x) => x * kSpeed);
-  const spd = B.maN(speedDisp, Math.round(0.25 * rate)); // 0.5 s centred
+  // A stopped scooter reads exactly 0 (see B.stoppedMask): zero the stopped samples before the
+  // 0.5 s average, then again after it so the average can't smear moving samples back in.
+  const stopped = B.stoppedMask(get('speedKmh'), rate, get('speedSrc'));
+  const speedDisp = B.mapN(get('speedKmh'), (x, i) => (stopped[i] ? 0 : x * kSpeed));
+  const spd = B.mapN(B.maN(speedDisp, Math.round(0.25 * rate)), (x, i) => (stopped[i] ? 0 : x)); // 0.5 s centred
   const ring = B.springN(spd, 8, rate);
   const pw = get('powerW');
   const dir = get('powerDir');
@@ -115,7 +118,7 @@ function buildHudSpec(tl, styleIn, opts) {
   for (let i = 0; i < n; i++) if (trip[i] === null) vmax[i] = null;
 
   const C = {
-    spd: chan(spd, rate, { tol: 0.05, digits: 2 }),
+    spd: chan(spd, rate, { tol: 0.05, digits: 2, zeroPins: true }),
     ring: chan(ring, rate, { tol: 0.1, digits: 2 }),
     pw: chan(pw, rate, { tol: 3, digits: 1 }),
     pwdir: chan(B.mapN(dir, (x) => x), rate, { hold: true, digits: 0 }),

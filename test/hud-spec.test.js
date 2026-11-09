@@ -54,6 +54,40 @@ test('smoothing helpers keep nulls and settle', () => {
   assert.deepStrictEqual(B.runningMax([null, 2, 1, 5, null, 3]), [null, 2, 2, 5, 5, 5]);
 });
 
+test('stopped scooter: reads exactly 0 with no flicker, real low speeds still show', () => {
+  // the owner's stop pattern: a ramp down, parked with stray dash blips smeared to 0.02-0.25 km/h, then rolling
+  const park = []; for (let i = 0; i < 200; i++) park.push(i % 31 < 12 ? 0.14 : i % 17 < 4 ? 0.3 : 0);
+  const ramp = []; for (let i = 0; i < 20; i++) ramp.push(5 - i * 0.25);
+  const roll = []; for (let i = 0; i < 40; i++) roll.push(0.9 + 0.2 * Math.sin(i / 3)); // walking pace
+  const kmh = [].concat(ramp, park, roll, new Array(10).fill(null));
+  const m = B.stoppedMask(kmh, 10);
+  for (let i = 22; i < 215; i++) assert.ok(m[i], 'parked sample ' + i);
+  for (let i = 225; i < 260; i++) assert.ok(!m[i], 'rolling sample ' + i);
+  for (let i = 260; i < 270; i++) assert.ok(!m[i], 'null sample ' + i);
+  // a momentary dip while moving stays moving (dwell) and the slow crawl keeps its value
+  const dip = new Array(60).fill(3); dip[30] = dip[31] = 0.2;
+  assert.ok(B.stoppedMask(dip, 10).every((x) => !x));
+  // GPS sources: the same 0.9 km/h wobble counts as parked noise
+  const gps = new Array(100).fill(0.9), gm = B.stoppedMask(gps, 10, new Array(100).fill('phone-gps'));
+  assert.ok(gm.every(Boolean));
+
+  // through the spec and the baked keys, as AE reads them (linear between keys), in mph and km/h
+  const tl = synthTimeline({ minutes: 1 });
+  const n = tl.samples, ch = tl.channels;
+  const K = new Array(n).fill(null);
+  for (let i = 100; i < 100 + kmh.length && i < n; i++) K[i] = kmh[i - 100];
+  ch.speedKmh = K; ch.speedSrc = K.map((x) => (x == null ? null : 'scooter'));
+  for (const units of ['imperial', 'metric']) {
+    const sp = buildHudSpec(tl, { units, speedDecimals: 1 });
+    const ks = sp.channels.spd.keys;
+    const at = (t) => { let j = 0; while (j + 1 < ks.t.length && ks.t[j + 1] <= t) j++; if (j + 1 >= ks.t.length || ks.t[j] === t) return ks.v[j]; return ks.v[j] + ((ks.v[j + 1] - ks.v[j]) * (t - ks.t[j])) / (ks.t[j + 1] - ks.t[j]); };
+    // every frame of the parked stretch (samples 122..315, at 30 fps) formats as 0.0
+    for (let f = Math.ceil(12.2 * 30); f <= Math.floor(31.5 * 30); f++) assert.strictEqual(at(f / 30).toFixed(1), '0.0', units + ' frame ' + f);
+    // walking pace after the stop still shows (mph 0.3+, km/h 0.6+)
+    assert.ok(at(34) >= (units === 'imperial' ? 0.3 : 0.6), units + ' rolling ' + at(34));
+  }
+});
+
 test('time zone offsets', () => {
   assert.strictEqual(tzOffsetMin('America/Boise', Date.UTC(2026, 10, 7, 0, 36)), -420);
   assert.strictEqual(tzOffsetMin('America/Boise', Date.UTC(2026, 6, 7, 0, 36)), -360);

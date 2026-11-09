@@ -53,14 +53,41 @@ function runningMax(a, init) {
   return Array.from(a, (x) => { if (isNum(x) && x > m) m = x; return m === -Infinity ? null : m; });
 }
 
+// Stopped-scooter mask (true = stopped) from a 10 Hz speed in km/h, with hysteresis so the digits
+// don't flicker. The dash reports about 1 Hz in 0.1 km/h steps, with stray 0.1-0.5 km/h blips while
+// parked, and the +-1.5 s smoothing smears those and ramp tails into neighbours, so a parked scooter
+// hovers at 0.02-0.2 mph and rounds to "0.1". A sample becomes stopped once the speed has stayed
+// under enterKmh for dwellS; it stays stopped until the speed reaches leaveKmh. GPS sources are
+// noisier when parked, so they get higher thresholds. Slow rolling above the band still shows.
+function stoppedMask(kmh, rate, src, o) {
+  o = Object.assign({ enterKmh: 0.4, leaveKmh: 0.6, gpsEnterKmh: 1.2, gpsLeaveKmh: 1.8, dwellS: 0.5 }, o);
+  const n = kmh.length, mask = new Array(n).fill(false);
+  const dwell = Math.max(1, Math.round(o.dwellS * rate));
+  let stopped = false, run = 0;
+  for (let i = 0; i < n; i++) {
+    if (!isNum(kmh[i])) { stopped = false; run = 0; continue; }
+    const gps = src && (src[i] === 'gopro-gps' || src[i] === 'phone-gps');
+    const enter = gps ? o.gpsEnterKmh : o.enterKmh, leave = gps ? o.gpsLeaveKmh : o.leaveKmh;
+    if (stopped) {
+      if (kmh[i] >= leave) { stopped = false; run = 0; } else mask[i] = true;
+    } else if (kmh[i] < enter) {
+      run++;
+      if (run >= dwell) { stopped = true; for (let k = i - run + 1; k <= i; k++) mask[k] = true; }
+    } else run = 0;
+  }
+  return mask;
+}
+
 // Fewest keys so that linear interpolation stays within tol of every valid sample.
 // Returns {t:[], v:[]} with t in seconds (sample i at i/rate). Across a null run the value is
 // held at the last valid value (a key at the first null sample), so nothing drifts while the
-// widget shows "no data".
-function decimate(a, rate, tol, maxSeg) {
+// widget shows "no data". With zeroPins, the edges of every run of exact zeros are keys, so a
+// stopped stretch interpolates as exactly 0.
+function decimate(a, rate, tol, maxSeg, zeroPins) {
   maxSeg = maxSeg || 300;
   const t = [], v = [];
   const n = a.length;
+  const pin = (i) => zeroPins && a[i] === 0 && (i === 0 || a[i - 1] !== 0 || i === n - 1 || a[i + 1] !== 0);
   const push = (i, val) => { t.push(Math.round((i / rate) * 1e4) / 1e4); v.push(val); };
   let i = 0;
   while (i < n) {
@@ -77,6 +104,7 @@ function decimate(a, rate, tol, maxSeg) {
         for (let m = anchor + 1; m < j; m++) { const lerp = va + ((vb - va) * (m - anchor)) / (j - anchor); if (Math.abs(a[m] - lerp) > tol) { ok = false; break; } }
         if (!ok) break;
         best = j;
+        if (pin(j)) break;
       }
       anchor = best;
       push(anchor, a[anchor]);
@@ -134,4 +162,4 @@ function simplify(pts, tol) {
   return pts.filter((_, i) => keep[i]);
 }
 
-module.exports = { isNum, mapN, maN, easeN, springN, runningMax, decimate, steps, okKeys, roundKeys, simplify };
+module.exports = { isNum, mapN, maN, easeN, springN, runningMax, stoppedMask, decimate, steps, okKeys, roundKeys, simplify };
