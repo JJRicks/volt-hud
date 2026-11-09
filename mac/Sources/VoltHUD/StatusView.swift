@@ -64,6 +64,9 @@ struct StatusView: View {
                         .buttonStyle(.borderedProminent)
                         .disabled(model.assembleFolder == nil || model.busy != nil)
                 }
+                if let note = GoProExport.note(missing: model.assembleMissing) {
+                    Text(note).font(.callout).foregroundStyle(.secondary)
+                }
                 if let note = Assemble.upscaleNote(size: model.assembleSize, shape: model.assembleShape) {
                     Text(note).font(.callout).foregroundStyle(.secondary)
                 }

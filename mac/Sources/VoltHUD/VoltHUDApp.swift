@@ -68,6 +68,7 @@ final class Model: ObservableObject {
     }
 
     @Published var assembleFolder: URL?
+    @Published var assembleMissing = 0
     @Published var assembleSize: AssembleSize = .hd
     @Published var assembleShape: AssembleShape = .wide
 
@@ -78,13 +79,18 @@ final class Model: ObservableObject {
         panel.message = "Choose the folder with your recordings"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         assembleFolder = url
+        assembleMissing = GoProExport.missingMP4s(inFolder: url.path).count
     }
 
     func assemble() {
         guard let folder = assembleFolder?.path else { return }
         let size = assembleSize, shape = assembleShape
         run("Starting…", refreshAfter: false) { _, progress in
-            try Assemble.run(folder: folder, size: size, shape: shape, progress: progress)
+            defer {
+                let left = GoProExport.missingMP4s(inFolder: folder).count
+                Task { @MainActor in self.assembleMissing = left }
+            }
+            return try Assemble.run(folder: folder, size: size, shape: shape, progress: progress)
         }
     }
 

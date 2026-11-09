@@ -44,9 +44,17 @@ public enum Assemble {
                            runner: CommandRunner = ProcessRunner(), progress: @escaping (String) -> Void) throws -> String {
         guard let ae = Adobe.findAfterEffects() else { throw AssembleError("After Effects isn't in the Applications folder.") }
         guard let pr = findPremiere() else { throw AssembleError("Premiere Pro isn't in the Applications folder.") }
-        let open = runningApps(runner: runner)
-        if !open.isEmpty {
-            throw AssembleError("Save your work and quit \(open.joined(separator: " and ")) first. Assemble starts them itself so it doesn't disturb an open project.")
+        func refuseIfAdobeOpen() throws {
+            let open = runningApps(runner: runner)
+            if !open.isEmpty {
+                throw AssembleError("Save your work and quit \(open.joined(separator: " and ")) first. Assemble starts them itself so it doesn't disturb an open project.")
+            }
+        }
+        try refuseIfAdobeOpen()
+        let missing = GoProExport.missingMP4s(inFolder: folder)
+        if !missing.isEmpty {
+            try GoProExport.run(folder: folder, files: missing, runner: runner, progress: progress)
+            try refuseIfAdobeOpen()   // The export can take a long time.
         }
         let fm = FileManager.default
         let queue = queueDirectory()
@@ -92,7 +100,7 @@ public enum Assemble {
             throw AssembleError("The assembly finished but wrote no report.")
         }
         if !r.ok { throw AssembleError(r.text) }
-        return r.text
+        return missing.isEmpty ? r.text : "Exported \(missing.count) MP4\(missing.count == 1 ? "" : "s") with GoPro Player.\n" + r.text
     }
 }
 
