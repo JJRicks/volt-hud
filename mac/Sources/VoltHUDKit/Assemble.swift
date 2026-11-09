@@ -60,12 +60,15 @@ public enum Assemble {
         try job.write(to: queue.appendingPathComponent("pending.json"), options: .atomic)
 
         progress("Starting After Effects and Premiere…")
-        _ = try? runner.run("/usr/bin/open", [ae.appPath], timeout: 30)
+        // The engine page only starts once After Effects has been brought to the front, so it opens last.
         _ = try? runner.run("/usr/bin/open", [pr.appPath], timeout: 30)
+        _ = try? runner.run("/usr/bin/open", [ae.appPath], timeout: 30)
 
         let start = Date()
         var seen = false
         var last = ""
+        var lastNudge = start
+        var toldToClick = false
         while true {
             if let data = try? Data(contentsOf: progressFile), let p = try? JSONDecoder().decode(AssembleProgress.self, from: data) {
                 seen = true
@@ -73,6 +76,14 @@ public enum Assemble {
                 if p.done { break }
             }
             let elapsed = Date().timeIntervalSince(start)
+            if !seen && Date().timeIntervalSince(lastNudge) >= 10 {
+                lastNudge = Date()
+                _ = try? runner.run("/usr/bin/open", [ae.appPath], timeout: 30)
+            }
+            if !seen && !toldToClick && elapsed > 30 {
+                toldToClick = true
+                progress("Still waiting for After Effects. If its Dock icon is bouncing, click it once.")
+            }
             if !seen && elapsed > 240 { throw AssembleError("After Effects didn't pick up the job after 4 minutes. Is the Volt HUD panel up to date?") }
             if elapsed > 3600 { throw AssembleError("The assembly did not finish within an hour.") }
             Thread.sleep(forTimeInterval: 1)
