@@ -108,7 +108,7 @@
       if (!ready) { finish('Premiere did not answer. Open it and try again.'); return; }
 
       step('Building the Premiere project');
-      var pproJob = { prproj: prproj, aep: aep, sequence: stem, width: out.width, height: out.height, projection: out.projection, motionScale: out.motionScale,
+      var pproJob = { prproj: prproj, aep: aep, sequence: stem, width: out.width, height: out.height, projection: out.projection, reframeView: A.REFRAME_VIEW, motionScale: out.motionScale,
         recordings: pproRecs, comps: comps, reportPath: path.join(workDir, 'ppro-report.json'), probe: job.probe || null };
       var jobPath = path.join(workDir, 'ppro-job.json');
       writeJson(jobPath, pproJob);

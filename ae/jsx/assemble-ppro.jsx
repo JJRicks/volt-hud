@@ -88,6 +88,14 @@ var VoltAssemblePPro = (function () {
           pr.setValue(job.projection, true);
           entry.projection = pr.getValue();
           if (Number(entry.projection) !== job.projection) throw new Error('read back ' + entry.projection);
+          var view = job.reframeView || {};
+          for (var vn in view) {
+            var vp = findProp(rf, vn);
+            if (!vp) throw new Error('no ' + vn + ' control');
+            vp.setValue(view[vn], true);
+            entry[vn] = vp.getValue();
+            if (Math.abs(Number(entry[vn]) - view[vn]) > 0.01) throw new Error(vn + ' read back ' + entry[vn]);
+          }
         } catch (e1) { R.reframeFailures.push(clip.name); entry.error = String(e1); }
         if (job.motionScale) {
           var sc = findProp(findComponent(clip, /Motion/), 'Scale');

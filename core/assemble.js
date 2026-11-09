@@ -13,6 +13,10 @@ const CONF_RANK = { high: 3, medium: 2, low: 1 };
 
 // GoPro Reframe's "Projection" menu, 0-based (order checked against the plug-in's own strings and a saved project):
 // Source 0, HD Scope 1, HD 16:9 2, HD 4:3 3, Social 1:1 4, Social 4:5 5, Social 9:16 6, UHD 16:9 7, UHD Scope 8, 4K DCI 9.
+// The owner's camera mount, the same on every ride. These are the main camera's controls; Reframe's Second Camera
+// section repeats the names further down, and findProp in assemble-ppro.jsx takes the first of each.
+const REFRAME_VIEW = { Pan: 90, Tilt: -10, Zoom: 60 };
+
 function outputFor(size, shape) {
   const tall = shape === '9:16', uhd = size === '4k';
   if (tall && uhd) return { width: 2160, height: 3840, aspect: '9:16', resolution: '4k', preset: 'vertical', projection: 6, motionScale: 200, upscaled: true };
@@ -166,4 +170,4 @@ function noRecordingsReason(skipped) {
   return (skipped || []).some((s) => /^could not read/.test(s.reason)) ? 'no recording in this folder could be read' : 'no recording in this folder has an MP4';
 }
 
-module.exports = { noRecordingsReason, outputFor, scanFolder, overlapSeconds, choosePairs, timeOrder, planFolder, assemblyStem, reportText, firstUtcMs, MIN_OVERLAP_S };
+module.exports = { REFRAME_VIEW, noRecordingsReason, outputFor, scanFolder, overlapSeconds, choosePairs, timeOrder, planFolder, assemblyStem, reportText, firstUtcMs, MIN_OVERLAP_S };

@@ -116,3 +116,11 @@ test('empty GPS samples from a camera with no lock are left out', () => {
   assert.deepStrictEqual(gpsSamples([a, none, b]), [a, b]);
   assert.deepStrictEqual(gpsSamples([none]), []);
 });
+
+test('Reframe gets the fixed mount view, and Premiere receives it', () => {
+  const A = require('../core/assemble');
+  assert.deepStrictEqual(A.REFRAME_VIEW, { Pan: 90, Tilt: -10, Zoom: 60 });
+  const fs = require('fs'), path = require('path');
+  assert.match(fs.readFileSync(path.join(__dirname, '../ae/ext/engine.js'), 'utf8'), /reframeView: A\.REFRAME_VIEW/);
+  assert.match(fs.readFileSync(path.join(__dirname, '../ae/jsx/assemble-ppro.jsx'), 'utf8'), /job\.reframeView/);
+});
