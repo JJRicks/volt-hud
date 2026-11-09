@@ -43,6 +43,33 @@ struct StatusView: View {
             }
             .disabled(model.busy != nil)
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Assemble project").font(.headline)
+                HStack {
+                    Button("Choose folder…") { model.chooseAssembleFolder() }
+                    Text(model.assembleFolder?.path ?? "A folder of .360 recordings, MP4s and Volt rides")
+                        .foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                }
+                HStack(spacing: 16) {
+                    Picker("Size", selection: $model.assembleSize) {
+                        ForEach(AssembleSize.allCases, id: \.self) { Text($0.label).tag($0) }
+                    }.pickerStyle(.segmented).frame(width: 180)
+                    Picker("Shape", selection: $model.assembleShape) {
+                        ForEach(AssembleShape.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }.pickerStyle(.segmented).frame(width: 180)
+                    Spacer()
+                    Button("Go") { model.assemble() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.assembleFolder == nil || model.busy != nil)
+                }
+                if let note = Assemble.upscaleNote(size: model.assembleSize, shape: model.assembleShape) {
+                    Text(note).font(.callout).foregroundStyle(.secondary)
+                }
+            }
+            .disabled(model.busy != nil)
+
             if let busy = model.busy {
                 HStack(spacing: 8) { ProgressView().controlSize(.small); Text(busy) }
             }

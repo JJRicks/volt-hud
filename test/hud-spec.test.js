@@ -25,10 +25,14 @@ test('every preset and aspect keeps widgets inside the safe area without overlap
   }
 });
 
-test('style normalization: 9:16 maps focus to vertical, coords need the opt-in, bad values fall back', () => {
+test('style normalization: 9:16 maps focus to vertical, coords default on with an off switch, bad values fall back', () => {
   assert.strictEqual(normalizeStyle({ aspect: '9:16', preset: 'focus' }).preset, 'vertical');
   assert.deepStrictEqual(normalizeStyle({ aspect: '9:16' }).comp, [1080, 1920]);
-  assert.strictEqual(normalizeStyle({ widgets: { coords: true, map: true } }).widgets.coords, false);
+  assert.strictEqual(normalizeStyle({}).widgets.coords, true);
+  assert.strictEqual(normalizeStyle({}).widgets.map, true);
+  assert.strictEqual(normalizeStyle({}).coords, true);
+  const off = normalizeStyle({ coords: false, widgets: { coords: true, map: true } });
+  assert.strictEqual(off.coords, false); assert.strictEqual(off.widgets.coords, false); assert.strictEqual(off.widgets.map, false);
   const s = normalizeStyle({ accent: 'nope', scale: 9, plate: 5, units: 'imperial' });
   assert.strictEqual(s.accent, '#E32B2F'); assert.strictEqual(s.scale, 1.5); assert.strictEqual(s.plate, 0.7);
   assert.strictEqual(s.vertUnit, 'ft/min'); assert.strictEqual(s.clock24, false);
@@ -107,7 +111,7 @@ test('spec from a 60-minute synthetic timeline: comp length = .360, units, no-da
   assert.ok(Math.abs(sp.channels.clk.keys.v[0] - (17 * 3600 + 36 * 60 + 22.952)) < 0.01);
   const w = Object.fromEntries(sp.widgets.map((x) => [x.id, x]));
   assert.strictEqual(w.speed.p.unit, 'km/h');
-  assert.ok(!w.coords && !w.map, 'coordinates off by default');
+  assert.ok(!w.coords && !w.map, 'a timeline built without coordinates stays off');
   const im = buildHudSpec(tl, { units: 'imperial' });
   const maxK = Math.max(...sp.channels.spd.keys.v), maxM = Math.max(...im.channels.spd.keys.v);
   assert.ok(Math.abs(maxM / maxK - 0.621371) < 0.01);

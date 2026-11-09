@@ -18,7 +18,9 @@
   // ---------- settings ----------
   var KEY = 'volthud.panel.v1';
   function loadSettings() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
-  function saveSettings() { try { localStorage.setItem(KEY, JSON.stringify(readStyle(true))); } catch (e) {} }
+  // The Assemble engine (engine.js) reads the saved look from this file.
+  var LOOK_FILE = path.join(os.homedir(), 'Library', 'Application Support', 'Volt HUD', 'panel-look.json');
+  function saveSettings() { try { var s = JSON.stringify(readStyle(true)); localStorage.setItem(KEY, s); P.writePrivate(LOOK_FILE, s); } catch (e) {} }
 
   function readStyle(raw) {
     var widgets = {};
@@ -30,7 +32,7 @@
       coords: $('coords').checked, widgets: widgets, speedDecimals: +$('speedDecimals').value,
     };
     if (c24 !== 'auto') s.clock24 = c24 === '24';
-    if (raw) s.clockMode = c24;
+    if (raw) { s.clockMode = c24; s.coordsSwitch = $('coords').checked ? 'on' : 'off'; }
     return s;
   }
 
@@ -49,26 +51,26 @@
       l.innerHTML = '<input type="checkbox" id="w_' + k + '"> ' + LABELS[k];
       box.appendChild(l);
       var on = s.widgets && typeof s.widgets[k] === 'boolean' ? s.widgets[k] : STY.DEFAULT_ON[k];
-      if (k === 'coords' || k === 'map') on = s.widgets && s.widgets[k] === true;
+      if ((k === 'coords' || k === 'map') && !s.coordsSwitch) on = STY.DEFAULT_ON[k]; // saved before GPS became default-on
       l.firstChild.checked = on;
     });
     ['aspect', 'resolution', 'units', 'speedDecimals', 'accent', 'plate', 'scale', 'safe'].forEach(function (k) { if (s[k] != null) $(k).value = s[k]; });
     if (s.clockMode) $('clock24').value = s.clockMode;
-    $('coords').checked = false; // coordinates are opt-in every session
+    $('coords').checked = s.coordsSwitch !== 'off'; // on unless the user switched it off (owner, Nov 9)
     fillPresets(s.preset);
     syncCoordBoxes();
     showSliders();
     $('aspect').onchange = function () { fillPresets($('preset').value); saveSettings(); };
-    $('coords').onchange = syncCoordBoxes;
+    $('coords').onchange = function () { syncCoordBoxes(true); };
     document.querySelectorAll('section input, section select').forEach(function (el) {
       if (el.id === 'nudgeMs' || el.id === 'pvStart' || el.id === 'pvDur') return;
       el.addEventListener('change', function () { showSliders(); saveSettings(); });
       el.addEventListener('input', showSliders);
     });
   }
-  function syncCoordBoxes() {
+  function syncCoordBoxes(switched) {
     var on = $('coords').checked;
-    ['coords', 'map'].forEach(function (k) { var c = $('w_' + k); c.disabled = !on; if (!on) c.checked = false; else if (!c.dataset.touched) c.checked = true; });
+    ['coords', 'map'].forEach(function (k) { var c = $('w_' + k); c.disabled = !on; if (!on) c.checked = false; else if (switched && !c.dataset.touched) c.checked = true; });
   }
   function showSliders() {
     $('plateV').textContent = Math.round($('plate').value * 100) + ' %';
@@ -396,7 +398,7 @@
   function applyStyle(s) {
     ['aspect', 'resolution', 'units', 'speedDecimals', 'accent', 'plate', 'scale', 'safe'].forEach(function (k) { if (s[k] != null) $(k).value = s[k]; });
     fillPresets(s.preset);
-    if (s.coords != null) { $('coords').checked = !!s.coords; syncCoordBoxes(); }
+    if (s.coords != null) { $('coords').checked = !!s.coords; syncCoordBoxes(true); }
     showSliders();
   }
   try { window.__adobe_cep__.addEventListener('com.jjricks.volthud.run', automate); } catch (e) {}
@@ -404,6 +406,7 @@
   // ---------- start ----------
   try { $('ver').textContent = JSON.parse(fs.readFileSync(path.join(extDir, 'version.json'), 'utf8')).version; } catch (e) {}
   initControls();
+  saveSettings(); // keeps panel-look.json in step with what a previous version saved
   document.querySelectorAll('.checks input').forEach(function (c) { c.addEventListener('change', function () { c.dataset.touched = '1'; }); });
   fontStatus(null);
   updateButtons();

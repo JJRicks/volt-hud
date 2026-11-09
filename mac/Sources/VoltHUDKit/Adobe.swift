@@ -45,10 +45,15 @@ public struct AfterEffectsInstall: Equatable, Sendable {
 public enum Adobe {
     /// Newest "Adobe After Effects <year>" app under /Applications, read from its Info.plist.
     public static func findAfterEffects(applications: String = "/Applications") -> AfterEffectsInstall? {
+        findApp(prefix: "Adobe After Effects", applications: applications)
+    }
+
+    /// Newest "<prefix> <year>" app under /Applications, read from its Info.plist.
+    public static func findApp(prefix: String, applications: String = "/Applications") -> AfterEffectsInstall? {
         let fm = FileManager.default
         guard let items = try? fm.contentsOfDirectory(atPath: applications) else { return nil }
         var found: [AfterEffectsInstall] = []
-        for folder in items where folder.hasPrefix("Adobe After Effects") {
+        for folder in items where folder.hasPrefix(prefix) {
             let app = "\(applications)/\(folder)/\(folder).app"
             guard let plist = NSDictionary(contentsOfFile: app + "/Contents/Info.plist"),
                   let v = plist["CFBundleShortVersionString"] as? String else { continue }

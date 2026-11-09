@@ -7,7 +7,7 @@ const TOKENS = {
 };
 
 const WIDGETS = ['speed', 'power', 'battery', 'vertical', 'gmeter', 'jerk', 'clock', 'stats', 'coords', 'map'];
-const DEFAULT_ON = { speed: true, power: true, battery: true, vertical: true, gmeter: true, jerk: true, clock: true, stats: true, coords: false, map: false };
+const DEFAULT_ON = { speed: true, power: true, battery: true, vertical: true, gmeter: true, jerk: true, clock: true, stats: true, coords: true, map: true };
 const PRESETS = { '16:9': ['focus', 'corner', 'strip'], '9:16': ['vertical', 'corner', 'strip'] };
 const SIZES = { '16:9': [[1920, 1080], [3840, 2160]], '9:16': [[1080, 1920], [2160, 3840]] };
 
@@ -44,8 +44,7 @@ function normalizeStyle(s) {
   const widgets = {};
   const w = s.widgets || {};
   for (const k of WIDGETS) widgets[k] = typeof w[k] === 'boolean' ? w[k] : DEFAULT_ON[k];
-  if (s.coords === true && w.coords == null) widgets.coords = true;
-  if (!s.coords) { widgets.coords = false; widgets.map = false; } // privacy: coordinates need the explicit opt-in
+  if (s.coords === false) { widgets.coords = false; widgets.map = false; } // the panel's GPS off switch
   return {
     aspect, preset, comp, units,
     vertUnit: vertUnits.indexOf(s.vertUnit) >= 0 ? s.vertUnit : units === 'imperial' ? 'ft/min' : 'm/min',
@@ -56,7 +55,7 @@ function normalizeStyle(s) {
     plate: clamp(Number.isFinite(+s.plate) && s.plate !== null && s.plate !== '' ? +s.plate : 0.6, 0, 0.7),
     scale: clamp(Number.isFinite(+s.scale) && s.scale ? +s.scale : 1, 0.75, 1.5),
     safe: clamp(Number.isFinite(+s.safe) && s.safe !== null && s.safe !== '' ? +s.safe : 0.05, 0, 0.2),
-    coords: !!s.coords,
+    coords: s.coords !== false,
     widgets,
     tz: s.tz || null,
     compName: s.compName || null,

@@ -15,10 +15,10 @@ struct VoltHUDApp: App {
     var body: some Scene {
         WindowGroup("Volt HUD") {
             StatusView(model: model)
-                .frame(minWidth: 520, idealWidth: 600, maxWidth: 900, minHeight: 420)
+                .frame(minWidth: 520, idealWidth: 600, maxWidth: 900, minHeight: 560)
                 .onAppear { NSApplication.shared.activate(ignoringOtherApps: true) }
         }
-        .defaultSize(width: 600, height: 460)
+        .defaultSize(width: 600, height: 620)
         .windowResizability(.contentSize)
     }
 }
@@ -65,6 +65,27 @@ final class Model: ObservableObject {
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         run("Starting…") { inst, progress in try inst.remove(progress: progress) }
+    }
+
+    @Published var assembleFolder: URL?
+    @Published var assembleSize: AssembleSize = .hd
+    @Published var assembleShape: AssembleShape = .wide
+
+    func chooseAssembleFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.message = "Choose the folder with your recordings"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        assembleFolder = url
+    }
+
+    func assemble() {
+        guard let folder = assembleFolder?.path else { return }
+        let size = assembleSize, shape = assembleShape
+        run("Starting…", refreshAfter: false) { _, progress in
+            try Assemble.run(folder: folder, size: size, shape: shape, progress: progress)
+        }
     }
 
     func openCreativeCloud() {

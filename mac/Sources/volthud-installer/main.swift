@@ -3,6 +3,7 @@
 //   volthud-installer install-latest
 //   volthud-installer install <file.zxp>
 //   volthud-installer remove
+//   volthud-installer assemble <folder> <1080|4k> <16:9|9:16>
 // The same VOLTHUD_* environment overrides as the app apply (see AppConfig).
 import Foundation
 import VoltHUDKit
@@ -36,10 +37,15 @@ do {
     case "install":
         guard args.count == 2 else { say("usage: volthud-installer install <file.zxp>"); exit(2) }
         print(try installer.install(zxp: URL(fileURLWithPath: args[1]), progress: say))
+    case "assemble":
+        guard args.count == 4, let size = AssembleSize(rawValue: args[2]), let shape = AssembleShape(rawValue: args[3]) else {
+            say("usage: volthud-installer assemble <folder> <1080|4k> <16:9|9:16>"); exit(2)
+        }
+        print(try Assemble.run(folder: args[1], size: size, shape: shape, progress: say))
     case "remove":
         print(try installer.remove(progress: say))
     default:
-        say("usage: volthud-installer status [--offline] | install-latest | install <file.zxp> | remove")
+        say("usage: volthud-installer status [--offline] | install-latest | install <file.zxp> | remove | assemble <folder> <1080|4k> <16:9|9:16>")
         exit(2)
     }
 } catch {

@@ -5,6 +5,7 @@
   ExtensionBundleName="Volt HUD" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
     <Extension Id="com.jjricks.volthud.panel" Version="0.1.5"/>
+    <Extension Id="com.jjricks.volthud.engine" Version="0.1.5"/>
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
@@ -40,6 +41,25 @@
             <MaxSize><Height>3000</Height><Width>1200</Width></MaxSize>
           </Geometry>
         </UI>
+      </DispatchInfo>
+    </Extension>
+    <Extension Id="com.jjricks.volthud.engine">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./engine.html</MainPath>
+          <CEFCommandLine>
+            <Parameter>--enable-nodejs</Parameter>
+            <Parameter>--mixed-context</Parameter>
+          </CEFCommandLine>
+        </Resources>
+        <Lifecycle>
+          <AutoVisible>false</AutoVisible>
+          <StartOn>
+            <Event>com.adobe.csxs.events.ApplicationActivate</Event>
+            <Event>applicationActivate</Event>
+          </StartOn>
+        </Lifecycle>
+        <UI><Type>Custom</Type><Geometry><Size><Height>100</Height><Width>100</Width></Size></Geometry></UI>
       </DispatchInfo>
     </Extension>
   </DispatchInfoList>

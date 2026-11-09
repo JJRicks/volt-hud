@@ -15,10 +15,10 @@ mkdir -p "$W"; S="$W/stage"; out="$W/VoltHUD-$ver.zxp"
 rm -rf "$S" "$out"
 cp -R "$repo/ae/ext" "$S"
 mkdir -p "$S/jsx" "$S/node_modules"
-cp "$repo/ae/jsx/build-comp.jsx" "$S/jsx/"
+cp "$repo/ae/jsx/build-comp.jsx" "$repo/ae/jsx/assemble-ae.jsx" "$repo/ae/jsx/assemble-ppro.jsx" "$S/jsx/"
 cp -R "$repo/core" "$S/core"
 for m in gopro-telemetry binary-parser; do cp -RL "$repo/node_modules/$m" "$S/node_modules/$m"; done
-sed -i '' -e "s/ExtensionBundleVersion=\"[^\"]*\"/ExtensionBundleVersion=\"$ver\"/" -e "s/<Extension Id=\"com.jjricks.volthud.panel\" Version=\"[^\"]*\"/<Extension Id=\"com.jjricks.volthud.panel\" Version=\"$ver\"/" "$S/CSXS/manifest.xml"
+sed -i '' -e "s/ExtensionBundleVersion=\"[^\"]*\"/ExtensionBundleVersion=\"$ver\"/" -e "s/<Extension Id=\"com.jjricks.volthud.panel\" Version=\"[^\"]*\"/<Extension Id=\"com.jjricks.volthud.panel\" Version=\"$ver\"/" -e "s/<Extension Id=\"com.jjricks.volthud.engine\" Version=\"[^\"]*\"/<Extension Id=\"com.jjricks.volthud.engine\" Version=\"$ver\"/" "$S/CSXS/manifest.xml"
 printf '{"version":"%s"}\n' "$ver" > "$S/version.json"
 find "$S" -name .DS_Store -delete
 [ -z "$(find "$S" -type l)" ] || { echo "symlinks present" >&2; exit 1; }

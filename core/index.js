@@ -12,4 +12,5 @@ module.exports = {
   strip: require('./sync/strip'),
   hud: require('./hud/spec'),
   pipeline: require('./pipeline'),
+  assemble: require('./assemble'),
 };
