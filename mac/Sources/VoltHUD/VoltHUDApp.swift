@@ -90,7 +90,21 @@ final class Model: ObservableObject {
                 let left = GoProExport.missingMP4s(inFolder: folder).count
                 Task { @MainActor in self.assembleMissing = left }
             }
-            return try Assemble.run(folder: folder, size: size, shape: shape, progress: progress)
+            do {
+                let report = try Assemble.run(folder: folder, size: size, shape: shape, progress: progress)
+                Self.finishAssemble(.succeeded)
+                return report
+            } catch {
+                Self.finishAssemble(AssembleOutcome(error: error))
+                throw error
+            }
+        }
+    }
+
+    private nonisolated static func finishAssemble(_ outcome: AssembleOutcome) {
+        AssembleFinish(outcome: outcome, premiere: Assemble.findPremiere()).perform(runner: ProcessRunner()) { text in
+            // Not awaited: a first-run permission prompt mustn't hold up the app.
+            Task.detached { await FinishNotifier.shared.post(text) }
         }
     }
 

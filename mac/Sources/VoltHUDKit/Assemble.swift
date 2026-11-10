@@ -104,6 +104,31 @@ public enum Assemble {
     }
 }
 
+/// How a Go run ended.
+public enum AssembleOutcome: Equatable, Sendable {
+    case succeeded, failed, cancelled
+    public init(error: Error) { self = error is CancellationError ? .cancelled : .failed }
+}
+
+/// What the app does when a Go run ends. Only the app calls this, so the CLI and test harnesses never front an app or notify.
+public struct AssembleFinish: Equatable, Sendable {
+    public var frontApp: String?
+    public var notification: String?
+
+    public init(outcome: AssembleOutcome, premiere: AfterEffectsInstall?) {
+        switch outcome {
+        case .succeeded: (frontApp, notification) = (premiere?.appPath, "Processing complete")
+        case .failed: (frontApp, notification) = (nil, "Processing failed")
+        case .cancelled: (frontApp, notification) = (nil, nil)
+        }
+    }
+
+    public func perform(runner: CommandRunner, notify: (String) -> Void) {
+        if let frontApp { _ = try? runner.run("/usr/bin/open", [frontApp], timeout: 30) }
+        if let notification { notify(notification) }
+    }
+}
+
 public struct AssembleError: LocalizedError, Sendable {
     public var message: String
     public init(_ message: String) { self.message = message }
